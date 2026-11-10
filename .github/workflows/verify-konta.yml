@@ -14,6 +14,8 @@ jobs:
         run: |
           node --check app.js
           node --check media.js
+          node --check classic.js
+          node tests/classic-smoke.mjs
       - name: Verify site entry point and public-key hygiene
         run: |
           python3 - <<'PY'
@@ -23,7 +25,7 @@ jobs:
           media=Path("media.js").read_text(encoding="utf-8")
           css=Path("styles.css").read_text(encoding="utf-8")
           cfg=Path("config.js").read_text(encoding="utf-8")
-          for filename in ["app.js?v=6","media.js?v=6","styles.css?v=6"]:
+          for filename in ["app.js?v=7","media.js?v=7","styles.css?v=7","classic.js?v=7","classic.css?v=7"]:
               assert filename in html, f"Missing asset {filename}"
           for item in ["mediaUploadDialog","mediaAlbumDialog","mediaUploadForm","mediaAlbumForm"]:
               assert f'id="{item}"' in html, f"Missing element {item}"
@@ -32,5 +34,5 @@ jobs:
           assert "sb_secret_" not in cfg, "Secret key found in public config"
           assert "service_role" not in cfg.lower().replace("service_role key here", ""), "Service role in config"
           assert css.count("{")==css.count("}"), "Unbalanced CSS rules"
-          print("KONTA 6 entry points and static files verified")
+          print("KONTA 7 entry points and static files verified")
           PY
