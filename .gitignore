@@ -1,0 +1,11 @@
+# KONTA — keep secrets and generated files out of GitHub
+.env
+.env.*
+!.env.example
+node_modules/
+.netlify/
+dist/
+.DS_Store
+*.log
+*.pem
+*.key
