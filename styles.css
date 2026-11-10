@@ -91,3 +91,64 @@
  .chat-send-btn{padding:10px 8px}.chat-send-hint{left:45px;font-size:9px}
  .chat-message-body p{font-size:12px}
 }
+
+/* KONTA 6.0 — Albums, photo/video library, audio player */
+.media-controls{padding:16px 18px;margin-bottom:15px;display:grid;gap:14px}
+.media-links,.media-scope,.media-actions,.album-strip{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.media-links{border-bottom:1px solid var(--line);padding-bottom:12px}
+.media-links button{border:0;border-radius:7px;background:transparent;padding:8px 12px;color:#68839b;font-weight:700}
+.media-links button.selected,.media-links button:hover{background:#eaf3fb;color:#276da0}
+.media-scope button{border:1px solid #dce6ef;border-radius:20px;background:#fff;color:#57758d;font-size:12px;padding:6px 14px}
+.media-scope button.selected{background:#447fb4;border-color:#447fb4;color:#fff}
+.media-actions{margin-top:0}
+.media-albums{padding-bottom:14px;margin-bottom:15px}
+.media-albums .panel-header{align-items:center}
+.media-albums .panel-header small{font-size:11px;color:#8196aa}
+.album-strip{padding:14px 16px 0;gap:8px}
+.album-strip button{max-width:100%;border:1px solid #dfebf4;border-radius:8px;background:#f8fbfe;padding:10px 13px;color:#496780;font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.album-strip button.selected{color:#fff;background:#447fb4;border-color:#447fb4}
+.album-manage{padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.album-manage span{font-size:12px;color:#8295a6}
+.album-manage button{border:0;background:none;color:#c04a5c;padding:5px;font-size:12px;white-space:nowrap}
+.media-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:16px}
+.media-item{display:flex;min-width:0;flex-direction:column;background:#fff;border:1px solid #dfe8f1;border-radius:11px;overflow:hidden;box-shadow:0 2px 8px rgba(31,67,100,.03)}
+.media-item>a{display:block;line-height:0;aspect-ratio:4/3;background:#edf2f6}
+.media-item>a img{width:100%;height:100%;object-fit:cover}
+.media-item>video{display:block;background:#101822;width:100%;aspect-ratio:16/9}
+.media-item-meta{display:grid;gap:6px;padding:13px;overflow-wrap:anywhere;min-width:0}
+.media-item-meta>strong{font-size:13px;color:#294861}
+.media-item-meta>small{color:#8499ab;font-size:11px}
+.media-item-meta p{margin:0;white-space:pre-wrap;font-size:12px;color:#4c6579}
+.media-author{border:0;background:none;color:#306e9f;font-weight:750;font-size:11px;padding:0;text-align:left}
+.media-delete{justify-self:start;background:none;border:0;color:#b05c69;font-size:11px;padding:4px 0}
+.media-video .media-item{min-height:235px}
+.media-audio{grid-template-columns:1fr}
+.audio-item{display:grid;grid-template-columns:55px 1fr;gap:8px;align-items:center;padding:13px}
+.audio-icon{display:grid;place-items:center;color:#3e82b5;font-size:26px;border-radius:10px;width:51px;height:51px;background:#e7f2fc}
+.audio-item .media-item-meta{padding:2px 4px 2px 0}
+.audio-item audio{grid-column:1/-1;width:100%;height:42px}
+.empty-media{grid-column:1/-1;text-align:center;padding:34px 20px;color:#7e93a7}
+.legacy-gallery{margin:10px 0 17px}
+.legacy-gallery .photo-grid{padding:14px}
+#mediaUploadDialog .field select{background:#fff;border:1px solid #d6e1ed;border-radius:8px;color:var(--text);padding:11px 12px;width:100%}
+#mediaUploadDialog .field input[type=file]{font-size:12px;width:100%;padding:10px;background:#f5f9fd}
+#mediaUploadDialog .subtle{font-size:11px;line-height:1.5}
+@media (max-width:720px){
+ .media-controls{padding:13px;gap:12px}
+ .media-links{gap:2px}
+ .media-links button{font-size:12px;padding:9px 10px}
+ .media-actions .btn{flex:1 1 auto}
+ .media-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .media-item-meta{padding:10px;gap:5px}
+ .media-item-meta strong{font-size:12px}
+ .media-item-meta small{font-size:10px}
+ .media-video{grid-template-columns:1fr}
+ .media-audio{grid-template-columns:1fr}
+ .album-strip{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}
+ .album-strip button{flex-shrink:0}
+ .album-manage{flex-wrap:wrap}
+}
+@media (max-width:375px){
+ .media-grid.media-photo{grid-template-columns:1fr}
+ .media-links button{font-size:11px;padding:8px 7px}
+}
