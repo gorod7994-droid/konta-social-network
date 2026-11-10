@@ -1,0 +1,3 @@
+KONTA Netlify deployment verification
+Check token: konta-github-netlify-sync-20261110
+No secrets or user data.
