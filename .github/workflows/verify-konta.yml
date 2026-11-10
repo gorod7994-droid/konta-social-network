@@ -1,0 +1,36 @@
+name: Verify KONTA
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check media.js
+      - name: Verify site entry point and public-key hygiene
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html=Path("index.html").read_text(encoding="utf-8")
+          app=Path("app.js").read_text(encoding="utf-8")
+          media=Path("media.js").read_text(encoding="utf-8")
+          css=Path("styles.css").read_text(encoding="utf-8")
+          cfg=Path("config.js").read_text(encoding="utf-8")
+          for filename in ["app.js?v=6","media.js?v=6","styles.css?v=6"]:
+              assert filename in html, f"Missing asset {filename}"
+          for item in ["mediaUploadDialog","mediaAlbumDialog","mediaUploadForm","mediaAlbumForm"]:
+              assert f'id="{item}"' in html, f"Missing element {item}"
+          for item in ["media_albums","media_library"]:
+              assert item in app or item in media, f"Missing data {item}"
+          assert "sb_secret_" not in cfg, "Secret key found in public config"
+          assert "service_role" not in cfg.lower().replace("service_role key here", ""), "Service role in config"
+          assert css.count("{")==css.count("}"), "Unbalanced CSS rules"
+          print("KONTA 6 entry points and static files verified")
+          PY
