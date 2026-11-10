@@ -6,7 +6,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const imageSrc = url => typeof url==='string' && /^https:\/\//i.test(url) ? esc(url) : '';
 const idOK = value => typeof value==='string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(value);
 const fmtTime = value => {const d=new Date(value); if(Number.isNaN(d.valueOf()))return '';const diff=(Date.now()-d.getTime())/60000;if(diff>=0&&diff<1)return 'щойно';if(diff>=0&&diff<60)return `${Math.floor(diff)} хв тому`;if(diff>=0&&diff<1440)return `${Math.floor(diff/60)} год тому`;return new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(d)};
-const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
+const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
 const expandedComments = new Set();
 const messageDrafts = new Map();
 const conf=window.KONTA_CONFIG || {};
@@ -22,7 +22,7 @@ function feedback(selector,message,isError=false){const el=$(selector);if(el){el
 function toast(text){const node=$('#toast');node.textContent=text;node.classList.add('show');clearTimeout(lastToastTimer);lastToastTimer=setTimeout(()=>node.classList.remove('show'),3200)}
 function setBusy(selector,busy){const node=$(selector);if(node)node.disabled=busy}
 function errText(error){const msg=error?.message||String(error||'Невідома помилка');if(/Invalid login credentials/i.test(msg))return 'Неправильний email або пароль.';if(/Email not confirmed/i.test(msg))return 'Спочатку підтверди email за посиланням у пошті.';if(/User already registered/i.test(msg))return 'Цей email уже зареєстрований.';if(/Password should be at least/i.test(msg))return 'Пароль занадто короткий.';if(/Failed to fetch|NetworkError|fetch failed/i.test(msg))return 'Немає з’єднання. Перевір інтернет і онови сторінку.';if(/duplicate key|unique constraint/i.test(msg))return 'Це ім’я користувача вже зайняте.';if(/relation .* does not exist|schema cache|Could not find the table/i.test(msg))return 'Потрібно один раз запустити SETUP_SUPABASE.sql у Supabase → SQL Editor.';return msg}
-function showAuth(){state.user=null;state.profile=null;$('#app').hidden=true;$('#authScreen').hidden=false;if(liveChannel&&db){db.removeChannel(liveChannel);liveChannel=null}clearInterval(pollId);pollId=null;}
+function showAuth(){state.user=null;state.profile=null;state.prefsAppliedForUser=null;state.chatReplyId=null;state.chatEditId=null;$('#app').hidden=true;$('#authScreen').hidden=false;if(liveChannel&&db){db.removeChannel(liveChannel);liveChannel=null}clearInterval(pollId);pollId=null;}
 function changeAuthMode(mode){authMode=mode;$$('[data-mode]').forEach(b=>b.classList.toggle('is-active',b.dataset.mode===mode));$('#authNameRow').hidden=mode!=='signup';$('#authName').required=mode==='signup';$('#authPasswordRow').hidden=mode==='reset';$('#authPassword').required=mode!=='reset';$('#forgotBtn').textContent=mode==='reset'?'Повернутися до входу':'Забув пароль?';$('#authHeading').textContent=mode==='signup'?'Створи свою сторінку':mode==='reset'?'Відновити пароль':'З поверненням!';$('#authHint').textContent=mode==='signup'?'Реєстрація безкоштовна.':'Вкажи пошту — надішлемо посилання для відновлення.';if(mode==='login')$('#authHint').textContent='Увійди, щоб побачити новини друзів.';$('#authSubmit').textContent=mode==='signup'?'Зареєструватися':mode==='reset'?'Надіслати лист':'Увійти';$('#authPassword').autocomplete=mode==='signup'?'new-password':'current-password';feedback('#authFeedback','');}
 function showApp(){if(!state.user)return;$('#authScreen').hidden=true;$('#app').hidden=false;$('#topMyName').textContent=myName();$('#topAvatar').innerHTML=imageSrc(state.profile?.avatar_url)?`<img src="${imageSrc(state.profile.avatar_url)}" alt="">`:esc(initials(state.profile));render();}
 function setupError(){return `<div class="panel"><div class="panel-header"><h2>Потрібно налаштувати базу даних</h2></div><div class="panel-inner"><div class="error-box">${esc(initialLoadError||'Не вдалося завантажити дані Supabase.')}</div><p>Відкрий <b>Supabase → SQL Editor → New query</b>, встав увесь файл <b>SETUP_SUPABASE.sql</b>, натисни <b>Run</b>.</p><p>Потім повернися сюди й онови сторінку.</p><button class="btn primary" data-action="reload">Повторити завантаження</button></div></div>`}
@@ -39,18 +39,20 @@ async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refre
     ['members',db.from('community_members').select('*').limit(3000)],
     ['albums',db.from('media_albums').select('*').order('created_at',{ascending:false}).limit(500)],
     ['library',db.from('media_library').select('*').order('created_at',{ascending:false}).limit(1000)],
+    ['preferences',db.from('user_preferences').select('*').eq('user_id',id).maybeSingle()],
     ['messages',db.from('private_messages').select('*').or(`sender_id.eq.${id},recipient_id.eq.${id}`).order('created_at',{ascending:true}).limit(1000)],
     ['notifications',db.from('notifications').select('*').eq('target_id',id).order('created_at',{ascending:false}).limit(100)]
   ];
-  const results=await Promise.all(queries.map(async ([name,query])=>{const {data,error}=await query;if(error)throw new Error(`${name}: ${errText(error)}`);return [name,data||[]]}));
+  const results=await Promise.all(queries.map(async ([name,query])=>{const {data,error}=await query;if(error)throw new Error(`${name}: ${errText(error)}`);return [name,name==='preferences'?(data||null):(data||[])]}));
   if(id!==me())return;
   for(const [name,data] of results)state[name]=data;
+  if(window.KONTA_CLASSIC){state.preferences=window.KONTA_CLASSIC.applyPreferences(state.preferences);if(state.prefsAppliedForUser!==id){state.feedFilter=state.preferences.feed_default;state.prefsAppliedForUser=id;}}
   state.profile=byId(id);initialLoadError=state.profile?null:'Профіль не знайдено. Запусти SETUP_SUPABASE.sql у SQL Editor.';
   if(!quiet)toast('Дані оновлено');
  }catch(error){initialLoadError=errText(error);if(!quiet)toast(initialLoadError)}finally{refreshInFlight=false;showApp()}}
 async function signedIn(user){if(!user)return;if(state.user?.id===user.id&&authBoot)return;state.user=user;authBoot=true;$('#authScreen').hidden=true;$('#app').hidden=false;$('#main').innerHTML='<div class="loading-card">Завантажуємо твою сторінку…</div>';await loadAll(true);subscribeLive();if(!pollId)pollId=setInterval(()=>{if(document.visibilityState==='visible'&&state.user)loadAll(true)},25000);}
 function subscribeLive(){if(!db||!state.user)return;if(liveChannel)db.removeChannel(liveChannel);liveChannel=db.channel(`konta-${me()}`)
-  .on('postgres_changes',{event:'INSERT',schema:'public',table:'private_messages'},()=>scheduleReload())
+  .on('postgres_changes',{event:'*',schema:'public',table:'private_messages'},()=>scheduleReload())
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications'},()=>scheduleReload())
   .subscribe();}
 function scheduleReload(){if(refreshScheduled)return;refreshScheduled=true;setTimeout(()=>{refreshScheduled=false;loadAll(true)},500)}
@@ -90,8 +92,49 @@ function postCard(p){
  ${commentsHtml}<form class="comment-form" data-post-id="${esc(p.id)}"><div class="reply-banner" hidden><span class="reply-caption"></span><button type="button" data-action="comment-reply-cancel" data-id="${esc(p.id)}" aria-label="Скасувати відповідь">×</button></div><div class="comment-form-row">${avatar(state.profile,'sm')}<input name="comment" maxlength="500" required placeholder="Написати коментар..." autocomplete="off"><button type="submit">Надіслати</button></div></form></div></article>`;
 }
 function empty(title,detail,emoji='♡'){return `<div class="panel"><div class="empty"><span class="empty-emoji">${emoji}</span><strong>${esc(title)}</strong>${esc(detail)}</div></div>`}
-function viewFeed(){let posts=state.posts.filter(p=>!p.community_id);if(state.feedFilter==='friends')posts=posts.filter(p=>friendIds().includes(p.user_id));if(state.feedFilter==='mine')posts=posts.filter(p=>p.user_id===me());return `<h1 class="page-title">Новини</h1>${composer()}<div class="panel">${tabs([['all','Усі дописи'],['friends','Від друзів'],['mine','Мої']],state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('Тут поки що порожньо','Створи перший допис або запроси друзів.','✎')}`}
-function viewProfile(){const uid=state.profileId||me(),p=byId(uid);if(!p)return empty('Користувача не знайдено','Можливо, його сторінку видалено.');const own=uid===me(),followers=state.friends.filter(f=>f.status==='accepted'&&(f.requester_id===uid||f.addressee_id===uid)).length;const posts=state.posts.filter(x=>x.user_id===uid&&!x.community_id);return `<div class="panel"><div class="cover"></div><div class="profile-info"><div class="profile-topline">${avatar(p,'lg')}<div>${own?`<button class="btn soft" data-action="profile-edit">✎ Редагувати</button>`:`${friendAction(uid)} <button class="btn soft" data-action="chat-open" data-id="${esc(uid)}">✉ Написати</button>`}</div></div><h2>${esc(p.display_name)}</h2><div class="profile-handle">@${esc(p.username)}</div><p class="bio">${esc(p.bio||'Привіт! Я у KONTA 👋')}</p><div class="stats"><div><b>${posts.length}</b>дописів</div><div><b>${followers}</b>друзів</div><div><b>${state.members.filter(m=>m.user_id===uid).length}</b>спільнот</div></div></div></div><h3 class="section-heading">${own?'Мої дописи':'Дописів користувача'}</h3>${posts.length?posts.map(postCard).join(''):empty('Публікацій поки немає','Тут з’являться нові дописи.')}`}
+function viewFeed(){
+ let posts=[...state.posts];
+ if(state.feedFilter==='friends')posts=posts.filter(p=>friendIds().includes(p.user_id)&&!p.community_id);
+ else if(state.feedFilter==='groups')posts=posts.filter(p=>p.community_id);
+ else if(state.feedFilter==='mine')posts=posts.filter(p=>p.user_id===me());
+ else if(state.feedFilter==='liked')posts=posts.filter(p=>state.likes.some(l=>l.user_id===me()&&l.post_id===p.id));
+ const filters=[['all','Усі новини'],['friends','Друзі'],['groups','Спільноти'],['mine','Мої'],['liked','Сподобалося']];
+ return `<h1 class="page-title">Мої новини</h1>${composer()}<div class="panel">${tabs(filters,state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('У цій стрічці поки порожньо','Додай друзів, підпишись на спільноти чи створи допис.','✎')}`;
+}
+function viewProfile(){
+ const uid=state.profileId||me(),p=byId(uid);
+ if(!p)return empty('Користувача не знайдено','Можливо, його сторінку видалено.');
+ const own=uid===me();
+ const fids=state.friends.filter(f=>f.status==='accepted'&&(f.requester_id===uid||f.addressee_id===uid))
+  .map(f=>f.requester_id===uid?f.addressee_id:f.requester_id);
+ const friends=fids.map(byId).filter(Boolean);
+ const posts=state.posts.filter(x=>x.user_id===uid&&!x.community_id);
+ const libraryPhotos=state.library.filter(x=>x.kind==='photo'&&x.owner_id===uid);
+ const postPhotos=state.posts.filter(x=>x.user_id===uid&&imageSrc(x.media_url)).map(x=>x.media_url);
+ const photoUrls=[...libraryPhotos.map(x=>db.storage.from('konta-library').getPublicUrl(x.storage_path).data.publicUrl),...postPhotos].slice(0,6);
+ const actions=own?`<button class="btn primary small" data-action="profile-edit">Редагувати сторінку</button>`:
+ `${friendAction(uid)} <button class="btn primary small" data-action="chat-open" data-id="${esc(uid)}">Написати повідомлення</button>`;
+ const friendGrid=friends.slice(0,6).map(x=>`<button data-action="profile-open" data-id="${esc(x.id)}" title="${esc(x.display_name)}">${avatar(x,'sm')}<span>${esc(x.display_name.split(' ')[0])}</span></button>`).join('');
+ const images=photoUrls.map(src=>`<img src="${imageSrc(src)}" loading="lazy" alt="Фото користувача">`).join('');
+ return `<div class="profile-classic">
+ <aside class="profile-classic-rail">
+  <div class="panel profile-photo-card">${avatar(p,'lg')}${own?'<button class="btn soft small" data-action="profile-edit">Змінити фотографію</button>':`<button class="btn primary small" data-action="chat-open" data-id="${esc(uid)}">Написати</button>`}</div>
+  <div class="panel"><h3 class="classic-section-title">Друзі <span>${friends.length}</span></h3><div class="classic-peek"><div class="classic-friend-grid">${friendGrid||'<span class="subtle">Поки немає друзів</span>'}</div></div></div>
+  <div class="panel"><h3 class="classic-section-title">Фотографії <span>${photoUrls.length}</span></h3><div class="classic-peek"><div class="classic-mini-photos">${images||'<span class="subtle">Поки немає фото</span>'}</div></div></div>
+ </aside>
+ <section class="classic-profile-main">
+  <div class="panel profile-summary">
+   <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}</h1><span>@${esc(p.username)}</span></div>
+   <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong><span>У KONTA:</span><strong>${esc(fmtTime(p.created_at))}</strong></div>
+   <div class="profile-classic-actions">${actions}</div>
+   <div class="profile-stats"><button data-nav="friends"><b>${friends.length}</b>друзів</button><button data-nav="photos"><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button data-nav="groups"><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button></div>
+  </div>
+  ${own?composer():''}
+  <h3 class="section-heading">Стіна · ${posts.length} записів</h3>
+  ${posts.length?posts.map(postCard).join(''):empty('Стіна поки порожня','Тут будуть записи з профілю.')}
+ </section>
+ </div>`;
+}
 function viewFriends(){const allFriends=state.friends.filter(f=>f.status==='accepted').map(f=>byId(f.requester_id===me()?f.addressee_id:f.requester_id)).filter(Boolean);const incoming=state.friends.filter(f=>f.status==='pending'&&f.addressee_id===me()).map(f=>byId(f.requester_id)).filter(Boolean);const outgoing=state.friends.filter(f=>f.status==='pending'&&f.requester_id===me()).map(f=>byId(f.addressee_id)).filter(Boolean);let current=state.friendsTab==='requests'?incoming:state.friendsTab==='outgoing'?outgoing:state.friendsTab==='all'?allFriends:state.profiles.filter(p=>p.id!==me());return `<h1 class="page-title">Друзі</h1><div class="panel">${tabs([['all',`Друзі (${allFriends.length})`],['requests',`Заявки (${incoming.length})`],['outgoing','Надіслані'],['people','Знайти людей']],state.friendsTab,'friends-tab')}<div class="person-list">${current.length?current.map(p=>personRow(p)).join(''):`<div class="empty">${state.friendsTab==='all'?'Поки немає друзів. Знайди когось через «Знайти людей».':'Тут поки що порожньо.'}</div>`}</div></div>`}
 function searchResultsHtml(q){const query=q.trim().toLowerCase();const people=state.profiles.filter(p=>p.id!==me()&&(!query||(p.display_name+' '+p.username+' '+p.bio).toLowerCase().includes(query))).slice(0,30);const posts=query?state.posts.filter(p=>(p.body+' '+(byId(p.user_id)?.display_name||'')).toLowerCase().includes(query)).slice(0,20):[];return `<div class="panel">${header(`Люди (${people.length})`)}<div class="person-list">${people.length?people.map(p=>personRow(p)).join(''):'<div class="empty">Нікого не знайдено</div>'}</div></div>${query?`<div class="section-heading">Дописи (${posts.length})</div>${posts.map(postCard).join('')}`:''}`}
 function viewExplore(){return `<h1 class="page-title">Пошук у KONTA</h1><div class="panel"><div class="panel-inner"><input class="search-large" id="exploreInput" placeholder="Ім’я, нікнейм або текст допису" value="${esc(state.search)}"></div></div><div id="searchResults">${searchResultsHtml(state.search)}</div>`}
