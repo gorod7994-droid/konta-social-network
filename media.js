@@ -5,7 +5,6 @@ const E = s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const TYPES={photo:['image/jpeg','image/png','image/webp','image/gif'],video:['video/mp4','video/webm'],audio:['audio/mpeg','audio/mp4','audio/ogg']};
 const LIMIT={photo:8*1048576,video:40*1048576,audio:15*1048576};
 const LABEL={photo:'Фотографії',video:'Відео',audio:'Музика'};
-const viewName={photo:'photos',video:'videos',audio:'music'};
 const username=id=>byId(id)?.display_name||'Користувач KONTA';
 const albumName=id=>state.albums.find(a=>a.id===id)?.title||'Без альбому';
 const url=m=>db.storage.from('konta-library').getPublicUrl(m.storage_path).data.publicUrl;
@@ -20,18 +19,20 @@ function mediaCard(m){
  return '<article class="media-item audio-item"><div class="audio-icon">♫</div>'+info+'<audio controls preload="none" src="'+src+'"></audio></article>';
 }
 function render(kind){
- const mineOnly=state.mediaScope==='mine',uid=state.mediaUserId,albumId=state.mediaAlbumId;
+ const mineOnly=state.mediaScope==='mine',albumId=state.mediaAlbumId;
  let items=state.library.filter(m=>m.kind===kind&&(!mineOnly||m.owner_id===me()));
- if(uid)items=items.filter(m=>m.owner_id===uid);
  if(kind==='photo'&&albumId)items=items.filter(m=>m.album_id===albumId);
  const mineAlbums=state.albums.filter(a=>a.owner_id===me());
+ const selectedAlbum=state.albums.find(a=>a.id===albumId);
  const albums=state.albums.filter(a=>!mineOnly||a.owner_id===me());
+ const oldPhotos=kind==='photo'&&!albumId?state.posts.filter(p=>imageSrc(p.media_url)&&(!mineOnly||p.user_id===me())):[];
  const controls='<div class="media-actions"><button class="btn primary small" data-action="media-upload-open" data-id="'+kind+'">＋ Додати '+(kind==='audio'?'аудіо':kind==='video'?'відео':'фото')+'</button>'+(kind==='photo'?'<button class="btn soft small" data-action="media-album-create">＋ Новий альбом</button>':'')+'</div>';
  const tabs='<div class="media-links"><button class="'+(kind==='photo'?'selected':'')+'" data-nav="photos">▧ Фото</button><button class="'+(kind==='video'?'selected':'')+'" data-nav="videos">▷ Відео</button><button class="'+(kind==='audio'?'selected':'')+'" data-nav="music">♫ Музика</button></div>';
  const scope='<div class="media-scope"><button class="'+(!mineOnly?'selected':'')+'" data-action="media-scope" data-id="all">Усі</button><button class="'+(mineOnly?'selected':'')+'" data-action="media-scope" data-id="mine">Мої</button></div>';
- const albumSection=kind==='photo'?'<section class="panel media-albums"><div class="panel-header"><h2>Фотоальбоми</h2><small>'+albums.length+' альбомів</small></div><div class="album-strip"><button class="'+(!albumId?'selected':'')+'" data-action="media-album-filter" data-id="all">Усі фото</button>'+albums.map(a=>'<button class="'+(albumId===a.id?'selected':'')+'" data-action="media-album-filter" data-id="'+E(a.id)+'">'+E(a.title)+'</button>').join('')+'</div></section>':'';
+ const albumSection=kind==='photo'?'<section class="panel media-albums"><div class="panel-header"><h2>Фотоальбоми</h2><small>'+albums.length+' альбомів</small></div><div class="album-strip"><button class="'+(!albumId?'selected':'')+'" data-action="media-album-filter" data-id="all">Усі фото</button>'+albums.map(a=>'<button class="'+(albumId===a.id?'selected':'')+'" data-action="media-album-filter" data-id="'+E(a.id)+'">'+E(a.title)+'</button>').join('')+'</div>'+(selectedAlbum?.owner_id===me()?'<div class="album-manage"><span>'+E(selectedAlbum.description||'Твій альбом')+'</span><button type="button" data-action="media-album-delete" data-id="'+E(albumId)+'">Видалити альбом</button></div>':'')+'</section>':'';
  const emptyText=kind==='photo'?'Додай фотографії до своєї сторінки.':kind==='video'?'Завантаж своє перше відео.':'Додай музику, на яку маєш права.';
- return '<h1 class="page-title">'+LABEL[kind]+'</h1><section class="panel media-controls">'+tabs+scope+controls+'</section>'+albumSection+'<div class="media-grid media-'+kind+'">'+(items.length?items.map(mediaCard).join(''):'<div class="panel empty-media">Поки немає записів. '+emptyText+'</div>')+'</div>'+(kind==='photo'&&mineAlbums.length?'<p class="subtle">Альбоми: '+mineAlbums.length+' · Відкривай альбоми, щоб переглянути фотографії.</p>':'');
+ const previousPhotos=oldPhotos.length?'<section class="panel legacy-gallery"><div class="panel-header"><h2>Фото з дописів</h2></div><div class="photo-grid">'+oldPhotos.map(p=>'<button title="Перейти до допису" data-action="post-find" data-id="'+E(p.id)+'"><img src="'+imageSrc(p.media_url)+'" loading="lazy" alt="Фото з допису"></button>').join('')+'</div></section>':'';
+ return '<h1 class="page-title">'+LABEL[kind]+'</h1><section class="panel media-controls">'+tabs+scope+controls+'</section>'+albumSection+'<div class="media-grid media-'+kind+'">'+(items.length?items.map(mediaCard).join(''):'<div class="panel empty-media">Поки немає записів. '+emptyText+'</div>')+'</div>'+previousPhotos+(kind==='photo'&&mineAlbums.length?'<p class="subtle">Альбоми: '+mineAlbums.length+' · Відкривай альбоми, щоб переглянути фотографії.</p>':'');
 }
 async function action(action,id){
  if(action==='media-upload-open'){
@@ -50,8 +51,14 @@ async function action(action,id){
   return;
  }
  if(action==='media-album-create'){document.querySelector('#mediaAlbumTitle').value='';document.querySelector('#mediaAlbumDescription').value='';document.querySelector('#mediaAlbumFeedback').textContent='';document.querySelector('#mediaAlbumDialog').showModal();return;}
- if(action==='media-scope'){state.mediaScope=id==='mine'?'mine':'all';state.mediaAlbumId=null;render();return;}
- if(action==='media-album-filter'){state.mediaAlbumId=id==='all'?null:id;render();return;}
+ if(action==='media-scope'){state.mediaScope=id==='mine'?'mine':'all';state.mediaAlbumId=null;window.render();return;}
+ if(action==='media-album-filter'){state.mediaAlbumId=id==='all'?null:id;window.render();return;}
+ if(action==='media-album-delete'){
+  const album=state.albums.find(a=>a.id===id);if(!album||album.owner_id!==me())return;
+  if(!confirm('Видалити альбом? Фото залишаться в розділі «Усі фото».'))return;
+  const {error}=await db.from('media_albums').delete().eq('id',id).eq('owner_id',me());if(error)throw error;
+  state.mediaAlbumId=null;await loadAll(true);toast('Альбом видалено');return;
+ }
  if(action==='media-delete'){
   const item=state.library.find(m=>m.id===id);if(!item||item.owner_id!==me())return;
   if(!confirm('Видалити цей файл з KONTA?'))return;
