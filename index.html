@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=3a0d2c5f-a91e-447a-9aa5-384ff8a059ae
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. --><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#3f76a7"><meta name="description" content="KONTA — місце, де зустрічаються твої люди. Соціальна мережа для друзів та спілкування.">
+<title>KONTA — твої люди поруч</title>
+<link rel="icon" href="assets/icon-192.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=5">
+</head>
+<body>
+<section id="authScreen" class="auth-screen">
+  <header class="auth-header"><div class="container auth-head-inner"><div class="logo"><span class="logo-icon">К</span>KONTA<span class="logo-dot">.</span></div><span>Твої люди поруч</span></div></header>
+  <div class="container auth-layout">
+    <div class="auth-intro"><div class="intro-badge">ЗНАЙОМСТВА • ДРУЗІ • СПІЛКУВАННЯ</div><h1>Твій світ.<br><span>Твої люди.</span></h1><p>Сторінки друзів, жива стрічка, особисті повідомлення та спільноти. Усе знайоме — у новій KONTA.</p><div class="intro-preview"><span>✎</span><span>♡</span><span>✉</span><span>◎</span></div></div>
+    <div class="auth-box">
+      <div class="auth-tabs"><button type="button" data-mode="login" class="is-active">Вхід</button><button type="button" data-mode="signup">Реєстрація</button></div>
+      <div class="auth-body"><h2 id="authHeading">З поверненням!</h2><p id="authHint">Увійди, щоб побачити новини друзів.</p>
+      <form id="authForm">
+        <label id="authNameRow" class="field" hidden>Як тебе звати?<input type="text" id="authName" maxlength="40" autocomplete="name" placeholder="Ім’я та прізвище"></label>
+        <label class="field">Електронна пошта<input type="email" id="authEmail" autocomplete="email" required placeholder="name@example.com"></label>
+        <label id="authPasswordRow" class="field">Пароль<input type="password" id="authPassword" autocomplete="current-password" minlength="6" required placeholder="Не менше 6 символів"></label>
+        <button class="btn primary btn-block" id="authSubmit" type="submit">Увійти</button>
+      </form>
+      <button class="link-btn" id="forgotBtn" type="button">Забув пароль?</button>
+      <div class="form-feedback" role="status" id="authFeedback"></div>
+      <p class="auth-note">Реєструючись, ти погоджуєшся спілкуватися з повагою до інших.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="app" hidden>
+  <header class="site-top"><div class="container top-inner"><button class="top-logo" data-nav="feed"><span class="logo-icon">К</span><b>KONTA</b></button><details class="mobile-more"><summary aria-label="Відкрити меню KONTA" title="Меню">☰</summary><div class="mobile-more-panel" aria-label="Розділи KONTA"><button type="button" data-nav="groups">◎ Спільноти</button><button type="button" data-nav="photos">▧ Фотографії</button><button type="button" data-nav="explore">⌕ Пошук</button><button type="button" data-nav="notifications">♢ Сповіщення</button><hr><button type="button" id="mobileSettingsBtn">⚙ Редагувати профіль</button><button type="button" id="mobileLogoutBtn">⇥ Вийти з акаунта</button></div></details><label class="top-search"><span>⌕</span><input id="topSearch" placeholder="Пошук людей і дописів..." autocomplete="off"></label><div class="top-actions"><button class="top-icon" data-nav="notifications" title="Сповіщення">♧<i id="noticeDot" hidden></i></button><button class="top-icon" data-nav="messages" title="Повідомлення">✉</button><button class="top-me" data-nav="profile"><span id="topMyName">Мій профіль</span><span class="top-avatar" id="topAvatar">К</span>⌄</button></div></div></header>
+  <div class="container site-layout">
+    <aside class="left-panel"><nav id="mainNav">
+      <button data-nav="profile"><span>◉</span>Моя сторінка</button>
+      <button data-nav="feed" class="is-active"><span>⌂</span>Новини</button>
+      <button data-nav="messages"><span>✉</span>Повідомлення</button>
+      <button data-nav="friends"><span>♧</span>Друзі <small id="requestsBubble" hidden></small></button>
+      <button data-nav="groups"><span>◎</span>Спільноти</button>
+      <button data-nav="photos"><span>▧</span>Фотографії</button>
+      <button data-nav="explore"><span>⌕</span>Пошук</button>
+      <button data-nav="notifications"><span>♢</span>Сповіщення</button>
+    </nav><div class="left-separator"></div><button class="side-utility" id="settingsBtn">⚙ Редагувати профіль</button><button class="side-utility" id="logoutBtn">⇥ Вийти</button><div class="side-foot">KONTA © 2026<br>Твої люди поруч</div></aside>
+    <main id="main" class="main-content" aria-live="polite"><div class="loading-card">Завантаження KONTA…</div></main>
+    <aside class="right-panel"><div class="side-card" id="rightWelcome"><div class="side-label">ЛАСКАВО ПРОСИМО</div><h3>Місце для<br><span>твоїх людей.</span></h3><p>Скажи привіт друзям, ділись моментами та створюй своє коло.</p><button class="btn soft" data-nav="friends">Знайти друзів</button></div><div class="side-card"><div class="card-heading">Можливо, ви знайомі</div><div id="suggestions">Ще немає користувачів</div></div><div class="side-card mini-help"><b>Порада 💙</b><p>Запроси друга до KONTA, щоб випробувати справжні повідомлення.</p></div></aside>
+  </div>
+  <nav class="bottom-nav" aria-label="Основне меню"><button type="button" data-nav="feed"><span>⌂</span>Новини</button><button type="button" data-nav="friends"><span>♧</span>Друзі</button><button type="button" data-nav="groups" aria-label="Спільноти"><span>◎</span>Групи</button><button type="button" id="mobileCreate"><span>⊕</span>Допис</button><button type="button" data-nav="messages"><span>✉</span>Чати</button><button type="button" data-nav="profile"><span>◉</span>Я</button></nav>
+</div>
+
+<dialog id="postDialog" class="modal"><form id="postForm" class="modal-content"><div class="modal-top"><h2>Новий допис</h2><button type="button" class="close-modal" data-close="postDialog">×</button></div><label class="field">Що нового?<textarea id="postText" rows="5" maxlength="2000" placeholder="Поділись думками, новинами або фотографією..."></textarea></label><div class="form-row"><label class="file-select">▧ Додати фото<input type="file" id="postFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label><span class="subtle" id="postFileLabel">До 8 МБ</span></div><img id="postPreview" alt="Попередній перегляд" hidden><div class="form-feedback" id="postFeedback"></div><button type="submit" class="btn primary btn-block" id="postSubmit">Опублікувати</button></form></dialog>
+<dialog id="profileDialog" class="modal"><form id="profileForm" class="modal-content"><div class="modal-top"><h2>Редагувати профіль</h2><button type="button" class="close-modal" data-close="profileDialog">×</button></div><label class="field">Ім'я<input id="profileName" required maxlength="40"></label><label class="field">Нікнейм (латиницею)<input id="profileUsername" required minlength="3" maxlength="24" pattern="[a-z0-9_]{3,24}" placeholder="myname"></label><label class="field">Про себе<textarea id="profileBio" maxlength="180" rows="3"></textarea></label><label class="file-select">▧ Фото профілю<input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp" hidden></label><div class="form-feedback" id="profileFeedback"></div><button class="btn primary btn-block" type="submit" id="profileSubmit">Зберегти зміни</button></form></dialog>
+<dialog id="groupDialog" class="modal"><form id="groupForm" class="modal-content"><div class="modal-top"><h2>Створити спільноту</h2><button type="button" class="close-modal" data-close="groupDialog">×</button></div><label class="field">Назва спільноти<input id="groupName" maxlength="60" minlength="2" required placeholder="Наприклад: Музика"></label><label class="field">Опис<textarea id="groupDescription" rows="3" maxlength="300"></textarea></label><div class="form-feedback" id="groupFeedback"></div><button type="submit" class="btn primary btn-block" id="groupSubmit">Створити</button></form></dialog>
+<dialog id="resetDialog" class="modal"><form id="resetForm" class="modal-content"><div class="modal-top"><h2>Новий пароль</h2><button type="button" class="close-modal" data-close="resetDialog">×</button></div><p>Придумай новий пароль для KONTA.</p><label class="field">Новий пароль<input type="password" id="resetPassword" minlength="6" required autocomplete="new-password"></label><div class="form-feedback" id="resetFeedback"></div><button type="submit" class="btn primary btn-block">Змінити пароль</button></form></dialog>
+<div id="toast" class="toast" role="status"></div>
+<script>
+// Remove stale service worker/cache from the old KONTA demo deployment.
+if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations()
+  .then(items => items.forEach(r => r.unregister())).catch(() => {});
+if ('caches' in window) caches.keys()
+  .then(keys => keys.filter(k => k.startsWith('konta-shell')).forEach(k => caches.delete(k))).catch(() => {});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js?v=5"></script>
+<script src="app.js?v=5" defer></script>
+</body></html>
