@@ -6,7 +6,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const imageSrc = url => typeof url==='string' && /^https:\/\//i.test(url) ? esc(url) : '';
 const idOK = value => typeof value==='string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(value);
 const fmtTime = value => {const d=new Date(value); if(Number.isNaN(d.valueOf()))return '';const diff=(Date.now()-d.getTime())/60000;if(diff>=0&&diff<1)return 'щойно';if(diff>=0&&diff<60)return `${Math.floor(diff)} хв тому`;if(diff>=0&&diff<1440)return `${Math.floor(diff/60)} год тому`;return new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(d)};
-const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
+const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
 const expandedComments = new Set();
 const messageDrafts = new Map();
 const conf=window.KONTA_CONFIG || {};
@@ -22,7 +22,7 @@ function feedback(selector,message,isError=false){const el=$(selector);if(el){el
 function toast(text){const node=$('#toast');node.textContent=text;node.classList.add('show');clearTimeout(lastToastTimer);lastToastTimer=setTimeout(()=>node.classList.remove('show'),3200)}
 function setBusy(selector,busy){const node=$(selector);if(node)node.disabled=busy}
 function errText(error){const msg=error?.message||String(error||'Невідома помилка');if(/Invalid login credentials/i.test(msg))return 'Неправильний email або пароль.';if(/Email not confirmed/i.test(msg))return 'Спочатку підтверди email за посиланням у пошті.';if(/User already registered/i.test(msg))return 'Цей email уже зареєстрований.';if(/Password should be at least/i.test(msg))return 'Пароль занадто короткий.';if(/Failed to fetch|NetworkError|fetch failed/i.test(msg))return 'Немає з’єднання. Перевір інтернет і онови сторінку.';if(/duplicate key|unique constraint/i.test(msg))return 'Це ім’я користувача вже зайняте.';if(/relation .* does not exist|schema cache|Could not find the table/i.test(msg))return 'Потрібно один раз запустити SETUP_SUPABASE.sql у Supabase → SQL Editor.';return msg}
-function showAuth(){state.user=null;state.profile=null;$('#app').hidden=true;$('#authScreen').hidden=false;if(liveChannel&&db){db.removeChannel(liveChannel);liveChannel=null}clearInterval(pollId);pollId=null;}
+function showAuth(){state.user=null;state.profile=null;state.prefsAppliedForUser=null;state.chatReplyId=null;state.chatEditId=null;$('#app').hidden=true;$('#authScreen').hidden=false;if(liveChannel&&db){db.removeChannel(liveChannel);liveChannel=null}clearInterval(pollId);pollId=null;}
 function changeAuthMode(mode){authMode=mode;$$('[data-mode]').forEach(b=>b.classList.toggle('is-active',b.dataset.mode===mode));$('#authNameRow').hidden=mode!=='signup';$('#authName').required=mode==='signup';$('#authPasswordRow').hidden=mode==='reset';$('#authPassword').required=mode!=='reset';$('#forgotBtn').textContent=mode==='reset'?'Повернутися до входу':'Забув пароль?';$('#authHeading').textContent=mode==='signup'?'Створи свою сторінку':mode==='reset'?'Відновити пароль':'З поверненням!';$('#authHint').textContent=mode==='signup'?'Реєстрація безкоштовна.':'Вкажи пошту — надішлемо посилання для відновлення.';if(mode==='login')$('#authHint').textContent='Увійди, щоб побачити новини друзів.';$('#authSubmit').textContent=mode==='signup'?'Зареєструватися':mode==='reset'?'Надіслати лист':'Увійти';$('#authPassword').autocomplete=mode==='signup'?'new-password':'current-password';feedback('#authFeedback','');}
 function showApp(){if(!state.user)return;$('#authScreen').hidden=true;$('#app').hidden=false;$('#topMyName').textContent=myName();$('#topAvatar').innerHTML=imageSrc(state.profile?.avatar_url)?`<img src="${imageSrc(state.profile.avatar_url)}" alt="">`:esc(initials(state.profile));render();}
 function setupError(){return `<div class="panel"><div class="panel-header"><h2>Потрібно налаштувати базу даних</h2></div><div class="panel-inner"><div class="error-box">${esc(initialLoadError||'Не вдалося завантажити дані Supabase.')}</div><p>Відкрий <b>Supabase → SQL Editor → New query</b>, встав увесь файл <b>SETUP_SUPABASE.sql</b>, натисни <b>Run</b>.</p><p>Потім повернися сюди й онови сторінку.</p><button class="btn primary" data-action="reload">Повторити завантаження</button></div></div>`}
@@ -39,18 +39,20 @@ async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refre
     ['members',db.from('community_members').select('*').limit(3000)],
     ['albums',db.from('media_albums').select('*').order('created_at',{ascending:false}).limit(500)],
     ['library',db.from('media_library').select('*').order('created_at',{ascending:false}).limit(1000)],
+    ['preferences',db.from('user_preferences').select('*').eq('user_id',id).maybeSingle()],
     ['messages',db.from('private_messages').select('*').or(`sender_id.eq.${id},recipient_id.eq.${id}`).order('created_at',{ascending:true}).limit(1000)],
     ['notifications',db.from('notifications').select('*').eq('target_id',id).order('created_at',{ascending:false}).limit(100)]
   ];
-  const results=await Promise.all(queries.map(async ([name,query])=>{const {data,error}=await query;if(error)throw new Error(`${name}: ${errText(error)}`);return [name,data||[]]}));
+  const results=await Promise.all(queries.map(async ([name,query])=>{const {data,error}=await query;if(error)throw new Error(`${name}: ${errText(error)}`);return [name,name==='preferences'?(data||null):(data||[])]}));
   if(id!==me())return;
   for(const [name,data] of results)state[name]=data;
+  if(window.KONTA_CLASSIC){state.preferences=window.KONTA_CLASSIC.applyPreferences(state.preferences);if(state.prefsAppliedForUser!==id){state.feedFilter=state.preferences.feed_default;state.prefsAppliedForUser=id;}}
   state.profile=byId(id);initialLoadError=state.profile?null:'Профіль не знайдено. Запусти SETUP_SUPABASE.sql у SQL Editor.';
   if(!quiet)toast('Дані оновлено');
  }catch(error){initialLoadError=errText(error);if(!quiet)toast(initialLoadError)}finally{refreshInFlight=false;showApp()}}
-async function signedIn(user){if(!user)return;if(state.user?.id===user.id&&authBoot)return;state.user=user;authBoot=true;$('#authScreen').hidden=true;$('#app').hidden=false;$('#main').innerHTML='<div class="loading-card">Завантажуємо твою сторінку…</div>';await loadAll(true);subscribeLive();if(!pollId)pollId=setInterval(()=>{if(document.visibilityState==='visible'&&state.user)loadAll(true)},25000);}
+async function signedIn(user){if(!user)return;if(state.user?.id===user.id&&authBoot)return;state.user=user;authBoot=true;$('#authScreen').hidden=true;$('#app').hidden=false;$('#main').innerHTML='<div class="loading-card">Завантажуємо твою сторінку…</div>';await loadAll(true);subscribeLive();const linkedPost=new URLSearchParams(location.hash.slice(1)).get('post');if(idOK(linkedPost)){const linked=state.posts.find(p=>p.id===linkedPost);if(linked){if(linked.community_id)go('group',{groupId:linked.community_id});else go('feed');setTimeout(()=>$('#post-'+linkedPost)?.scrollIntoView({block:'center'}),150)}}if(!pollId)pollId=setInterval(()=>{if(document.visibilityState==='visible'&&state.user)loadAll(true)},25000);}
 function subscribeLive(){if(!db||!state.user)return;if(liveChannel)db.removeChannel(liveChannel);liveChannel=db.channel(`konta-${me()}`)
-  .on('postgres_changes',{event:'INSERT',schema:'public',table:'private_messages'},()=>scheduleReload())
+  .on('postgres_changes',{event:'*',schema:'public',table:'private_messages'},()=>scheduleReload())
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications'},()=>scheduleReload())
   .subscribe();}
 function scheduleReload(){if(refreshScheduled)return;refreshScheduled=true;setTimeout(()=>{refreshScheduled=false;loadAll(true)},500)}
@@ -90,8 +92,49 @@ function postCard(p){
  ${commentsHtml}<form class="comment-form" data-post-id="${esc(p.id)}"><div class="reply-banner" hidden><span class="reply-caption"></span><button type="button" data-action="comment-reply-cancel" data-id="${esc(p.id)}" aria-label="Скасувати відповідь">×</button></div><div class="comment-form-row">${avatar(state.profile,'sm')}<input name="comment" maxlength="500" required placeholder="Написати коментар..." autocomplete="off"><button type="submit">Надіслати</button></div></form></div></article>`;
 }
 function empty(title,detail,emoji='♡'){return `<div class="panel"><div class="empty"><span class="empty-emoji">${emoji}</span><strong>${esc(title)}</strong>${esc(detail)}</div></div>`}
-function viewFeed(){let posts=state.posts.filter(p=>!p.community_id);if(state.feedFilter==='friends')posts=posts.filter(p=>friendIds().includes(p.user_id));if(state.feedFilter==='mine')posts=posts.filter(p=>p.user_id===me());return `<h1 class="page-title">Новини</h1>${composer()}<div class="panel">${tabs([['all','Усі дописи'],['friends','Від друзів'],['mine','Мої']],state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('Тут поки що порожньо','Створи перший допис або запроси друзів.','✎')}`}
-function viewProfile(){const uid=state.profileId||me(),p=byId(uid);if(!p)return empty('Користувача не знайдено','Можливо, його сторінку видалено.');const own=uid===me(),followers=state.friends.filter(f=>f.status==='accepted'&&(f.requester_id===uid||f.addressee_id===uid)).length;const posts=state.posts.filter(x=>x.user_id===uid&&!x.community_id);return `<div class="panel"><div class="cover"></div><div class="profile-info"><div class="profile-topline">${avatar(p,'lg')}<div>${own?`<button class="btn soft" data-action="profile-edit">✎ Редагувати</button>`:`${friendAction(uid)} <button class="btn soft" data-action="chat-open" data-id="${esc(uid)}">✉ Написати</button>`}</div></div><h2>${esc(p.display_name)}</h2><div class="profile-handle">@${esc(p.username)}</div><p class="bio">${esc(p.bio||'Привіт! Я у KONTA 👋')}</p><div class="stats"><div><b>${posts.length}</b>дописів</div><div><b>${followers}</b>друзів</div><div><b>${state.members.filter(m=>m.user_id===uid).length}</b>спільнот</div></div></div></div><h3 class="section-heading">${own?'Мої дописи':'Дописів користувача'}</h3>${posts.length?posts.map(postCard).join(''):empty('Публікацій поки немає','Тут з’являться нові дописи.')}`}
+function viewFeed(){
+ let posts=[...state.posts];
+ if(state.feedFilter==='friends')posts=posts.filter(p=>friendIds().includes(p.user_id)&&!p.community_id);
+ else if(state.feedFilter==='groups')posts=posts.filter(p=>p.community_id);
+ else if(state.feedFilter==='mine')posts=posts.filter(p=>p.user_id===me());
+ else if(state.feedFilter==='liked')posts=posts.filter(p=>state.likes.some(l=>l.user_id===me()&&l.post_id===p.id));
+ const filters=[['all','Усі новини'],['friends','Друзі'],['groups','Спільноти'],['mine','Мої'],['liked','Сподобалося']];
+ return `<h1 class="page-title">Мої новини</h1>${composer()}<div class="panel">${tabs(filters,state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('У цій стрічці поки порожньо','Додай друзів, підпишись на спільноти чи створи допис.','✎')}`;
+}
+function viewProfile(){
+ const uid=state.profileId||me(),p=byId(uid);
+ if(!p)return empty('Користувача не знайдено','Можливо, його сторінку видалено.');
+ const own=uid===me();
+ const fids=state.friends.filter(f=>f.status==='accepted'&&(f.requester_id===uid||f.addressee_id===uid))
+  .map(f=>f.requester_id===uid?f.addressee_id:f.requester_id);
+ const friends=fids.map(byId).filter(Boolean);
+ const posts=state.posts.filter(x=>x.user_id===uid&&!x.community_id);
+ const libraryPhotos=state.library.filter(x=>x.kind==='photo'&&x.owner_id===uid);
+ const postPhotos=state.posts.filter(x=>x.user_id===uid&&imageSrc(x.media_url)).map(x=>x.media_url);
+ const photoUrls=[...libraryPhotos.map(x=>db.storage.from('konta-library').getPublicUrl(x.storage_path).data.publicUrl),...postPhotos].slice(0,6);
+ const actions=own?`<button class="btn primary small" data-action="profile-edit">Редагувати сторінку</button>`:
+ `${friendAction(uid)} <button class="btn primary small" data-action="chat-open" data-id="${esc(uid)}">Написати повідомлення</button>`;
+ const friendGrid=friends.slice(0,6).map(x=>`<button data-action="profile-open" data-id="${esc(x.id)}" title="${esc(x.display_name)}">${avatar(x,'sm')}<span>${esc(x.display_name.split(' ')[0])}</span></button>`).join('');
+ const images=photoUrls.map(src=>`<img src="${imageSrc(src)}" loading="lazy" alt="Фото користувача">`).join('');
+ return `<div class="profile-classic">
+ <aside class="profile-classic-rail">
+  <div class="panel profile-photo-card">${avatar(p,'lg')}${own?'<button class="btn soft small" data-action="profile-edit">Змінити фотографію</button>':`<button class="btn primary small" data-action="chat-open" data-id="${esc(uid)}">Написати</button>`}</div>
+  <div class="panel"><h3 class="classic-section-title">Друзі <span>${friends.length}</span></h3><div class="classic-peek"><div class="classic-friend-grid">${friendGrid||'<span class="subtle">Поки немає друзів</span>'}</div></div></div>
+  <div class="panel"><h3 class="classic-section-title">Фотографії <span>${photoUrls.length}</span></h3><div class="classic-peek"><div class="classic-mini-photos">${images||'<span class="subtle">Поки немає фото</span>'}</div></div></div>
+ </aside>
+ <section class="classic-profile-main">
+  <div class="panel profile-summary">
+   <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}</h1><span>@${esc(p.username)}</span></div>
+   <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong><span>У KONTA:</span><strong>${esc(fmtTime(p.created_at))}</strong></div>
+   <div class="profile-classic-actions">${actions}</div>
+   <div class="profile-stats"><button data-nav="friends"><b>${friends.length}</b>друзів</button><button data-nav="photos"><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button data-nav="groups"><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button></div>
+  </div>
+  ${own?composer():''}
+  <h3 class="section-heading">Стіна · ${posts.length} записів</h3>
+  ${posts.length?posts.map(postCard).join(''):empty('Стіна поки порожня','Тут будуть записи з профілю.')}
+ </section>
+ </div>`;
+}
 function viewFriends(){const allFriends=state.friends.filter(f=>f.status==='accepted').map(f=>byId(f.requester_id===me()?f.addressee_id:f.requester_id)).filter(Boolean);const incoming=state.friends.filter(f=>f.status==='pending'&&f.addressee_id===me()).map(f=>byId(f.requester_id)).filter(Boolean);const outgoing=state.friends.filter(f=>f.status==='pending'&&f.requester_id===me()).map(f=>byId(f.addressee_id)).filter(Boolean);let current=state.friendsTab==='requests'?incoming:state.friendsTab==='outgoing'?outgoing:state.friendsTab==='all'?allFriends:state.profiles.filter(p=>p.id!==me());return `<h1 class="page-title">Друзі</h1><div class="panel">${tabs([['all',`Друзі (${allFriends.length})`],['requests',`Заявки (${incoming.length})`],['outgoing','Надіслані'],['people','Знайти людей']],state.friendsTab,'friends-tab')}<div class="person-list">${current.length?current.map(p=>personRow(p)).join(''):`<div class="empty">${state.friendsTab==='all'?'Поки немає друзів. Знайди когось через «Знайти людей».':'Тут поки що порожньо.'}</div>`}</div></div>`}
 function searchResultsHtml(q){const query=q.trim().toLowerCase();const people=state.profiles.filter(p=>p.id!==me()&&(!query||(p.display_name+' '+p.username+' '+p.bio).toLowerCase().includes(query))).slice(0,30);const posts=query?state.posts.filter(p=>(p.body+' '+(byId(p.user_id)?.display_name||'')).toLowerCase().includes(query)).slice(0,20):[];return `<div class="panel">${header(`Люди (${people.length})`)}<div class="person-list">${people.length?people.map(p=>personRow(p)).join(''):'<div class="empty">Нікого не знайдено</div>'}</div></div>${query?`<div class="section-heading">Дописи (${posts.length})</div>${posts.map(postCard).join('')}`:''}`}
 function viewExplore(){return `<h1 class="page-title">Пошук у KONTA</h1><div class="panel"><div class="panel-inner"><input class="search-large" id="exploreInput" placeholder="Ім’я, нікнейм або текст допису" value="${esc(state.search)}"></div></div><div id="searchResults">${searchResultsHtml(state.search)}</div>`}
@@ -110,15 +153,32 @@ function viewMessages(){
  if(!mobile&&!state.chatId)state.chatId=selected;
  const person=selected?byId(selected):null;
  const msgs=selected?state.messages.filter(m=>(m.sender_id===me()&&m.recipient_id===selected)||(m.recipient_id===me()&&m.sender_id===selected)):[];
- let currentDay='';const thread=msgs.map(m=>{
-  const day=chatDay(m.created_at);const separator=day!==currentDay?`<div class="chat-date"><span>${esc(day)}</span></div>`:'';currentDay=day;
-  const sender=byId(m.sender_id)||{display_name:'Користувач'};
-  return `${separator}<div class="chat-message ${m.sender_id===me()?'mine':''}" data-message-id="${esc(m.id)}">${avatar(sender,'sm')}<div class="chat-message-body"><div class="chat-message-heading"><a href="#" data-action="profile-open" data-id="${esc(m.sender_id)}">${esc(sender.display_name)}</a><time>${esc(chatClock(m.created_at))}</time></div><p>${esc(m.body)}</p></div></div>`}).join('');
- const list=users.map(id=>{const p=byId(id),last=[...state.messages].reverse().find(m=>(m.sender_id===me()&&m.recipient_id===id)||(m.recipient_id===me()&&m.sender_id===id));return `<button data-action="chat-open" data-id="${esc(id)}" class="chat-list-item ${selected===id?'is-active':''}">${avatar(p,'sm')}<span class="chat-list-meta"><b>${esc(p?.display_name||'Користувач')}</b><small>${esc(last?.body?.slice(0,62)||'Почніть спілкування')}</small></span>${last?`<time>${esc(chatClock(last.created_at))}</time>`:''}</button>`}).join('');
- return `<h1 class="page-title">Повідомлення</h1><div class="panel message-layout ${selected?'has-chat':''}"><div class="conversation-list"><div class="chat-list-heading">Діалоги <span>${users.length}</span></div>${users.length?list:'<div class="empty chat-list-empty">Знайди людину в розділі «Друзі» та натисни «Написати».</div>'}</div><div class="chat-panel">${person?`<div class="chat-head"><button class="mobile-chat-back" type="button" data-action="chat-back" aria-label="Назад до діалогів">‹</button>${avatar(person,'sm')}<span class="chat-contact"><a href="#" data-action="profile-open" data-id="${esc(person.id)}">${esc(person.display_name)}</a><small>@${esc(person.username||'konta')}</small></span><span class="chat-head-title">KONTA</span></div><div class="message-scroll" id="messageScroll">${thread||'<div class="empty chat-empty">Почни розмову з привітання 👋</div>'}</div><form id="messageForm" class="message-send"><button type="button" class="chat-emoji" data-action="emoji-insert" aria-label="Додати смайлик">☺</button><textarea name="body" rows="2" maxlength="2000" required placeholder="Напишіть повідомлення..." aria-label="Текст повідомлення">${esc(messageDrafts.get(selected)||'')}</textarea><button class="btn primary chat-send-btn" type="submit">Надіслати</button><small class="chat-send-hint">Enter — надіслати · Shift+Enter — новий рядок</small></form>`:'<div class="empty chat-empty"><span class="empty-emoji">✉</span><strong>Твої повідомлення</strong>Вибери діалог або відкрий профіль друга та натисни «Написати».</div>'}</div></div>`;
+ const messagesById=new Map(msgs.map(m=>[m.id,m]));
+ const list=users.map(id=>{
+  const p=byId(id),last=[...state.messages].reverse().find(m=>(m.sender_id===me()&&m.recipient_id===id)||(m.recipient_id===me()&&m.sender_id===id));
+  const name=p?.display_name||'Користувач';
+  return `<button data-action="chat-open" data-id="${esc(id)}" data-chat-name="${esc(name.toLowerCase())}" class="chat-list-item ${selected===id?'is-active':''}">${avatar(p,'sm')}<span class="chat-list-meta"><b>${esc(name)}</b><small>${esc(last?.body?.slice(0,60)||'Почніть спілкування')}</small></span>${last?`<time>${esc(chatClock(last.created_at))}</time>`:''}</button>`;
+ }).join('');
+ let currentDay='';
+ const thread=msgs.map(m=>{
+  const day=chatDay(m.created_at),sep=day!==currentDay?`<div class="chat-date"><span>${esc(day)}</span></div>`:'';currentDay=day;
+  const author=byId(m.sender_id)||{display_name:'Користувач'};
+  const mine=m.sender_id===me();
+  const parent=m.reply_to?messagesById.get(m.reply_to):null;
+  const quote=parent?`<div class="chat-quote"><b>${esc(byId(parent.sender_id)?.display_name||'Користувач')}</b><p>${esc(parent.body.slice(0,180))}</p></div>`:'';
+  const buttons=`<div class="chat-message-actions"><button data-action="chat-reply" data-id="${esc(m.id)}" title="Відповісти на повідомлення">↪ Відповісти</button><button data-action="chat-copy" data-id="${esc(m.id)}">Копіювати</button>${mine?`<button data-action="chat-edit" data-id="${esc(m.id)}">Редагувати</button><button data-action="chat-delete" data-id="${esc(m.id)}">Видалити</button>`:''}</div>`;
+  return `${sep}<div class="chat-message ${mine?'mine':''}" data-message-id="${esc(m.id)}">${avatar(author,'sm')}<div class="chat-message-body"><div class="chat-message-heading"><a href="#" data-action="profile-open" data-id="${esc(m.sender_id)}">${esc(author.display_name)}</a><time>${esc(chatClock(m.created_at))}</time>${m.edited_at?'<em class="edit-indicator">редаговано</em>':''}</div>${quote}<p>${esc(m.body)}</p>${buttons}</div></div>`;
+ }).join('');
+ const edited=msgs.find(m=>m.id===state.chatEditId&&m.sender_id===me());
+ const quoted=msgs.find(m=>m.id===state.chatReplyId);
+ const ctx=edited?`Редагування повідомлення: ${esc(edited.body.slice(0,90))}`:quoted?`Відповідь для ${esc(byId(quoted.sender_id)?.display_name||'користувача')}: ${esc(quoted.body.slice(0,80))}`:'';
+ const context=ctx?`<div class="chat-compose-context"><span>${ctx}</span><button type="button" data-action="chat-compose-cancel" title="Скасувати">×</button></div>`:'';
+ return `<h1 class="page-title">Мої повідомлення</h1><div class="panel message-layout ${selected?'has-chat':''}"><div class="conversation-list"><div class="chat-list-heading">Діалоги <span>${users.length}</span></div><div class="chat-search-wrap"><input class="chat-search" id="chatSearch" autocomplete="off" placeholder="Пошук діалогу..." aria-label="Пошук діалогу"></div>${users.length?list:'<div class="empty chat-list-empty">Знайди людину через «Друзі» та напиши їй.</div>'}</div><div class="chat-panel">${person?`<div class="chat-head"><button class="mobile-chat-back" type="button" data-action="chat-back" aria-label="Назад до діалогів">‹</button>${avatar(person,'sm')}<span class="chat-contact"><a href="#" data-action="profile-open" data-id="${esc(person.id)}">${esc(person.display_name)}</a><small>@${esc(person.username||'konta')}</small></span><span class="chat-head-title">Листування</span></div><div class="message-scroll" id="messageScroll">${thread||'<div class="empty chat-empty">Почни розмову з привітання!</div>'}</div><form id="messageForm" class="message-send">${context}<button type="button" class="chat-emoji" data-action="emoji-insert" aria-label="Додати смайлик">☺</button><textarea name="body" rows="2" maxlength="2000" required placeholder="Написати повідомлення..." aria-label="Текст повідомлення">${esc(messageDrafts.get(selected)||'')}</textarea><button class="btn primary chat-send-btn" type="submit">${edited?'Зберегти':'Надіслати'}</button><small class="chat-send-hint">${state.preferences?.enter_to_send===false?'Ctrl+Enter або кнопка — надіслати':'Enter — надіслати · Shift+Enter — новий рядок'}</small></form>`:'<div class="empty chat-empty"><span class="empty-emoji">✉</span><strong>Мої повідомлення</strong>Вибери діалог або відкрий профіль друга.</div>'}</div></div>`;
 }
+function viewBookmarks(){const liked=state.posts.filter(p=>state.likes.some(l=>l.user_id===me()&&l.post_id===p.id));return `<h1 class="page-title">Мої закладки</h1><div class="panel">${header('Вподобані записи')}</div>${liked.length?liked.map(postCard).join(''):empty('Закладок поки немає','Постав ♥ на допис — і він з’явиться тут.','☆')}`}
+function viewSettings(){return window.KONTA_CLASSIC?.renderSettings()||empty('Налаштування','Завантаження інтерфейсу...')}
 function viewNotifications(){const notices=state.notifications;const labels={friend:'надіслав(-ла) заявку в друзі',like:'вподобав(-ла) твій допис',comment:'прокоментував(-ла) твій допис',message:'написав(-ла) тобі повідомлення'};return `<h1 class="page-title">Сповіщення</h1><div class="panel">${header('Нові події','<button class="btn soft small" data-action="notice-read">Позначити прочитаними</button>')} ${notices.length?notices.map(n=>`<div class="notice ${n.is_read?'':'is-unread'}">${avatar(byId(n.actor_id),'sm')}<div class="notice-body"><a href="#" data-action="profile-open" data-id="${esc(n.actor_id)}">${esc(byId(n.actor_id)?.display_name||'Користувач')}</a> ${esc(labels[n.kind]||'є новина для тебе')}<small>${esc(fmtTime(n.created_at))}</small></div></div>`).join(''):'<div class="empty">Сповіщень поки немає</div>'}</div>`}
-function render(){if(!state.user)return;$$('[data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));renderSuggestions();const views={feed:viewFeed,profile:viewProfile,friends:viewFriends,explore:viewExplore,photos:viewPhotos,videos:viewVideos,music:viewMusic,groups:viewGroups,group:viewGroup,messages:viewMessages,notifications:viewNotifications};$('#main').innerHTML=initialLoadError?setupError():(views[state.view]||viewFeed)();if(state.view==='messages'){$('#messageScroll')?.scrollTo(0,999999)} }
+function render(){if(!state.user)return;$$('[data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));renderSuggestions();const views={feed:viewFeed,profile:viewProfile,friends:viewFriends,explore:viewExplore,photos:viewPhotos,videos:viewVideos,music:viewMusic,settings:viewSettings,bookmarks:viewBookmarks,groups:viewGroups,group:viewGroup,messages:viewMessages,notifications:viewNotifications};$('#main').innerHTML=initialLoadError?setupError():(views[state.view]||viewFeed)();if(state.view==='messages'){$('#messageScroll')?.scrollTo(0,999999)} }
 function go(view,opts={}){state.view=view;if('userId'in opts)state.profileId=opts.userId;if('chatId'in opts)state.chatId=opts.chatId;if('groupId'in opts)state.groupId=opts.groupId;if('search'in opts)state.search=opts.search;render();if(window.innerWidth<720)window.scrollTo({top:0,behavior:'smooth'})}
 function openPost(groupId=null){state.postGroupId=groupId;$('#postText').value='';$('#postFile').value='';$('#postFileLabel').textContent='До 8 МБ';$('#postPreview').hidden=true;feedback('#postFeedback','');$('#postDialog').showModal()}
 function openProfileEditor(){const p=state.profile;if(!p)return;$('#profileName').value=p.display_name;$('#profileUsername').value=p.username;$('#profileBio').value=p.bio||'';$('#avatarFile').value='';feedback('#profileFeedback','');$('#profileDialog').showModal()}
@@ -129,14 +189,14 @@ async function handlePostSubmit(ev){ev.preventDefault();if(loading)return;loadin
 async function handleProfileSubmit(ev){ev.preventDefault();if(loading)return;loading=true;setBusy('#profileSubmit',true);feedback('#profileFeedback','Зберігаємо...');try{const name=$('#profileName').value.trim(),username=$('#profileUsername').value.trim().toLowerCase(),bio=$('#profileBio').value.trim();if(!/^[a-z0-9_]{3,24}$/.test(username))throw Error('Нікнейм: 3–24 латинські літери, цифри або _.');if(!name)throw Error('Введи ім’я.');const file=$('#avatarFile').files[0];const avatar_url=file?await uploadImage(file,'avatar'):state.profile?.avatar_url||null;const {error}=await db.from('profiles').update({display_name:name,username,bio,avatar_url}).eq('id',me());if(error)throw error;$('#profileDialog').close();await afterChange('Профіль оновлено!')}catch(error){feedback('#profileFeedback',errText(error),true)}finally{loading=false;setBusy('#profileSubmit',false)}}
 async function handleGroupSubmit(ev){ev.preventDefault();if(loading)return;loading=true;setBusy('#groupSubmit',true);feedback('#groupFeedback','Створюємо...');try{const name=$('#groupName').value.trim(),description=$('#groupDescription').value.trim();const {data,error}=await db.from('communities').insert({owner_id:me(),name,description}).select('id').single();if(error)throw error;const join=await db.from('community_members').insert({community_id:data.id,user_id:me()});if(join.error)throw join.error;$('#groupDialog').close();await afterChange('Спільноту створено!');go('group',{groupId:data.id})}catch(error){feedback('#groupFeedback',errText(error),true)}finally{loading=false;setBusy('#groupSubmit',false)}}
 async function handleResetSubmit(ev){ev.preventDefault();const pw=$('#resetPassword').value;if(pw.length<6)return feedback('#resetFeedback','Мінімум 6 символів.',true);const {error}=await db.auth.updateUser({password:pw});if(error){feedback('#resetFeedback',errText(error),true);return}$('#resetDialog').close();toast('Пароль змінено.');}
-async function performAction(action,id){if(!state.user&&!['reload'].includes(action))return;try{
+async function performAction(action,id,node){if(!state.user&&!['reload'].includes(action))return;try{
  switch(action){
  case 'reload':initialLoadError=null;await loadAll(true);break;
  case 'post-open':openPost();break;
  case 'group-post':openPost(id);break;
  case 'profile-edit':openProfileEditor();break;
  case 'profile-open':if(idOK(id))go('profile',{userId:id});break;
- case 'chat-open':if(idOK(id))go('messages',{chatId:id});break;
+ case 'chat-open':if(idOK(id)){state.chatReplyId=null;state.chatEditId=null;go('messages',{chatId:id});}break;
  case 'group-open':if(idOK(id))go('group',{groupId:id});break;
  case 'group-create':$('#groupName').value='';$('#groupDescription').value='';feedback('#groupFeedback','');$('#groupDialog').showModal();break;
  case 'feed-tab':state.feedFilter=id;render();break;
@@ -146,10 +206,21 @@ async function performAction(action,id){if(!state.user&&!['reload'].includes(act
  case 'comment-reply':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;expandedComments.add(comment.post_id);render();const form=$(`#post-${comment.post_id} .comment-form`);if(!form)break;form.dataset.parentId=id;$('.reply-banner',form).hidden=false;$('.reply-caption',form).textContent=`Відповідь для ${byId(comment.user_id)?.display_name||'користувача'}`;const input=$('[name="comment"]',form);input.placeholder='Напишіть відповідь...';input.focus();break}
  case 'comment-reply-cancel':{const form=$(`#post-${id} .comment-form`);if(!form)break;delete form.dataset.parentId;$('.reply-banner',form).hidden=true;const input=$('[name="comment"]',form);input.placeholder='Написати коментар...';input.focus();break}
  case 'comment-like':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;const liked=state.commentLikes.some(l=>l.comment_id===id&&l.user_id===me());const req=liked?db.from('comment_likes').delete().eq('comment_id',id).eq('user_id',me()):db.from('comment_likes').insert({comment_id:id,user_id:me()});const {error}=await req;if(error)throw error;await afterChange();break}
- case 'chat-back':state.chatId=null;render();break;
+ case 'chat-back':state.chatId=null;state.chatReplyId=null;state.chatEditId=null;render();break;
+ case 'chat-reply':{const m=state.messages.find(x=>x.id===id&&(x.sender_id===state.chatId||x.recipient_id===state.chatId));if(!m)break;state.chatReplyId=id;state.chatEditId=null;render();$('#messageForm textarea')?.focus();break}
+ case 'chat-edit':{const m=state.messages.find(x=>x.id===id&&x.sender_id===me()&&x.recipient_id===state.chatId);if(!m)break;state.chatEditId=id;state.chatReplyId=null;messageDrafts.set(state.chatId,m.body);render();$('#messageForm textarea')?.focus();break}
+ case 'chat-compose-cancel':state.chatReplyId=null;state.chatEditId=null;messageDrafts.delete(state.chatId);render();$('#messageForm textarea')?.focus();break;
+ case 'chat-copy':{const m=state.messages.find(x=>x.id===id&&((x.sender_id===me()&&x.recipient_id===state.chatId)||(x.recipient_id===me()&&x.sender_id===state.chatId)));if(!m)break;if(navigator.clipboard){await navigator.clipboard.writeText(m.body);toast('Повідомлення скопійовано');}else toast('Копіювання недоступне у браузері');break}
+ case 'chat-delete':{const m=state.messages.find(x=>x.id===id&&x.sender_id===me());if(!m)break;if(!confirm('Видалити своє повідомлення в обох учасників розмови?'))break;const {error}=await db.from('private_messages').delete().eq('id',m.id).eq('sender_id',me());if(error)throw error;if(state.chatEditId===id)state.chatEditId=null;if(state.chatReplyId===id)state.chatReplyId=null;await afterChange('Повідомлення видалено');break}
+
  case 'emoji-insert':{const el=$('#messageForm textarea');if(!el)break;const start=el.selectionStart,end=el.selectionEnd;el.value=el.value.slice(0,start)+'🙂'+el.value.slice(end);el.selectionStart=el.selectionEnd=start+2;messageDrafts.set(state.chatId,el.value);el.focus();break} 
  case 'post-find':{const p=state.posts.find(p=>p.id===id);if(p?.community_id)go('group',{groupId:p.community_id});else go('feed');setTimeout(()=>$('#post-'+id)?.scrollIntoView({behavior:'smooth',block:'center'}),80);break}
- case 'share':{const p=state.posts.find(p=>p.id===id);if(!p)return;const text=p.body||'Дивись фото у KONTA';if(navigator.share){try{await navigator.share({title:'KONTA',text})}catch(_){}}else if(navigator.clipboard){await navigator.clipboard.writeText(text);toast('Текст допису скопійовано')}else toast('Копіювання не підтримується');break}
+ case 'share':{
+  const p=state.posts.find(p=>p.id===id);if(!p)break;
+  const url=location.origin+location.pathname+'#post='+encodeURIComponent(p.id);
+  if(navigator.share){try{await navigator.share({title:'KONTA',text:p.body?.slice(0,130)||'Допис у KONTA',url})}catch(_){}}else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Посилання на допис скопійовано')}else toast('Копіювання недоступне');
+  break;
+ }
  case 'post-like':{const liked=state.likes.find(l=>l.user_id===me()&&l.post_id===id);const req=liked?db.from('likes').delete().eq('post_id',id).eq('user_id',me()):db.from('likes').insert({post_id:id,user_id:me()});const {error}=await req;if(error)throw error;await afterChange();break}
  case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;await afterChange('Допис видалено');break}
  case 'comment-delete':{const c=state.comments.find(c=>c.id===id);if(!c||c.user_id!==me())break;const {error}=await db.from('comments').delete().eq('id',id).eq('user_id',me());if(error)throw error;await afterChange();break}
@@ -159,10 +230,28 @@ async function performAction(action,id){if(!state.user&&!['reload'].includes(act
  case 'group-join':{if(!idOK(id))break;const {error}=await db.from('community_members').insert({community_id:id,user_id:me()});if(error)throw error;await afterChange('Ти вступив(-ла) у спільноту!');break}
  case 'group-leave':{if(!idOK(id))break;const {error}=await db.from('community_members').delete().eq('community_id',id).eq('user_id',me());if(error)throw error;await afterChange('Ти вийшов(-ла) зі спільноти');break}
  case 'notice-read':{const {error}=await db.from('notifications').update({is_read:true}).eq('target_id',me()).eq('is_read',false);if(error)throw error;await afterChange('Сповіщення прочитано');break}
- default:if(action.startsWith('media-')&&window.KONTA_MEDIA)await window.KONTA_MEDIA.action(action,id);break;
+ default:if(action.startsWith('media-')&&window.KONTA_MEDIA)await window.KONTA_MEDIA.action(action,id);else if(action.startsWith('classic-')&&window.KONTA_CLASSIC)await window.KONTA_CLASSIC.action(action,id,node);break;
  }}catch(error){toast(errText(error))}}
 async function submitComment(form){const postId=form.dataset.postId,body=$('[name="comment"]',form).value.trim();if(!body||!idOK(postId))return;const btn=$('button[type="submit"]',form);btn.disabled=true;try{const parentId=form.dataset.parentId||null;if(parentId&&!state.comments.some(c=>c.id===parentId&&c.post_id===postId))throw Error('Неправильна відповідь.');const {error}=await db.from('comments').insert({post_id:postId,user_id:me(),body,parent_id:parentId});if(error)throw error;expandedComments.add(postId);await afterChange(parentId?'Відповідь додано':'Коментар додано')}catch(error){toast(errText(error));btn.disabled=false}}
-async function sendMessage(form){if(!state.chatId||!idOK(state.chatId))return;const input=$('[name="body"]',form),body=input.value.trim();if(!body)return;const btn=$('button[type="submit"]',form);btn.disabled=true;try{const {error}=await db.from('private_messages').insert({sender_id:me(),recipient_id:state.chatId,body});if(error)throw error;messageDrafts.delete(state.chatId);await afterChange();}catch(error){toast(errText(error));btn.disabled=false}}
+async function sendMessage(form){
+ if(!state.chatId||!idOK(state.chatId))return;
+ const input=$('[name="body"]',form),body=input.value.trim();if(!body)return;
+ const btn=$('button[type="submit"]',form);btn.disabled=true;
+ try{
+  let error=null;
+  const currentChat=state.chatId;
+  const editing=state.chatEditId?state.messages.find(m=>m.id===state.chatEditId&&m.sender_id===me()&&m.recipient_id===currentChat):null;
+  if(editing){
+   ({error}=await db.from('private_messages').update({body,edited_at:new Date().toISOString()}).eq('id',editing.id).eq('sender_id',me()));
+  }else{
+   const parent=state.chatReplyId?state.messages.find(m=>m.id===state.chatReplyId&&((m.sender_id===me()&&m.recipient_id===currentChat)||(m.recipient_id===me()&&m.sender_id===currentChat))):null;
+   ({error}=await db.from('private_messages').insert({sender_id:me(),recipient_id:currentChat,body,reply_to:parent?.id||null}));
+  }
+  if(error)throw error;
+  messageDrafts.delete(currentChat);state.chatReplyId=null;state.chatEditId=null;
+  await afterChange(editing?'Повідомлення змінено':null);
+ }catch(error){toast(errText(error));btn.disabled=false}
+}
 function wireEvents(){
  $$('[data-mode]').forEach(button=>button.addEventListener('click',()=>changeAuthMode(button.dataset.mode)));
  $('#forgotBtn').addEventListener('click',()=>changeAuthMode(authMode==='reset'?'login':'reset'));
@@ -179,13 +268,13 @@ function wireEvents(){
  $('#logoutBtn').addEventListener('click',signOut);
  $('#mobileLogoutBtn').addEventListener('click',signOut);
  $('#topSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){go('explore',{search:e.target.value.trim()})}});
- document.addEventListener('input',event=>{if(event.target.id==='exploreInput'){state.search=event.target.value;$('#searchResults').innerHTML=searchResultsHtml(state.search)}if(event.target.matches('#messageForm textarea[name="body"]')&&state.chatId)messageDrafts.set(state.chatId,event.target.value)});
+ document.addEventListener('input',event=>{if(event.target.id==='exploreInput'){state.search=event.target.value;$('#searchResults').innerHTML=searchResultsHtml(state.search)}if(event.target.matches('#messageForm textarea[name="body"]')&&state.chatId)messageDrafts.set(state.chatId,event.target.value);if(event.target.id==='chatSearch'){const q=event.target.value.trim().toLowerCase();$('.chat-list-item').forEach(n=>n.hidden=!n.dataset.chatName?.includes(q))}});
  document.addEventListener('submit',e=>{if(e.target.matches('.comment-form')){e.preventDefault();submitComment(e.target)}else if(e.target.id==='messageForm'){e.preventDefault();sendMessage(e.target)}});
- document.addEventListener('keydown',e=>{if(e.target.matches('#messageForm textarea[name="body"]')&&e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();e.target.closest('form')?.requestSubmit()}});
+ document.addEventListener('keydown',e=>{if(e.target.matches('#messageForm textarea[name="body"]')&&e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&(state.preferences?.enter_to_send!==false||e.ctrlKey||e.metaKey)){e.preventDefault();e.target.closest('form')?.requestSubmit()}});
  document.addEventListener('click',e=>{
   const closer=e.target.closest('[data-close]');if(closer){document.getElementById(closer.dataset.close)?.close();return}
-  const nav=e.target.closest('[data-nav]');if(nav){e.preventDefault();document.querySelector('.mobile-more')?.removeAttribute('open');const view=nav.dataset.nav;if(view==='messages'&&window.innerWidth<=720)state.chatId=null;go(view,view==='profile'?{userId:me()}:{}) ;return}
-  const act=e.target.closest('[data-action]');if(act){e.preventDefault();performAction(act.dataset.action,act.dataset.id);return}
+  const nav=e.target.closest('[data-nav]');if(nav){e.preventDefault();document.querySelector('.mobile-more')?.removeAttribute('open');const view=nav.dataset.nav;if(view==='messages'){state.chatReplyId=null;state.chatEditId=null;if(window.innerWidth<=720)state.chatId=null;}go(view,view==='profile'?{userId:me()}:{}) ;return}
+  const act=e.target.closest('[data-action]');if(act){e.preventDefault();performAction(act.dataset.action,act.dataset.id,act);return}
  });
  document.addEventListener('pointerdown',e=>{const m=document.querySelector('.mobile-more');if(m?.open&&!m.contains(e.target))m.removeAttribute('open')});
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.user)loadAll(true)});
