@@ -203,6 +203,59 @@ function postCard(p){
  ${commentsHtml}<form class="comment-form" data-post-id="${esc(p.id)}"><div class="reply-banner" hidden><span class="reply-caption"></span><button type="button" data-action="comment-reply-cancel" data-id="${esc(p.id)}" aria-label="Скасувати відповідь">×</button></div><div class="comment-form-row">${avatar(state.profile,'sm')}<input name="comment" maxlength="500" required placeholder="Написати коментар..." autocomplete="off"><button type="button" data-action="emoji-comment" data-id="${esc(p.id)}" aria-label="Додати емодзі">😊</button><button type="submit">Надіслати</button></div></form></div></article>`;
 }
 function empty(title,detail,emoji='♡'){return `<div class="panel"><div class="empty"><span class="empty-emoji">${emoji}</span><strong>${esc(title)}</strong>${esc(detail)}</div></div>`}
+
+// Accessible KONTA emoji grid and friend sharing dialogs.
+const KONTA_EMOJIS=['😀','😃','😄','😁','😆','😅','😂','🤣','😊','🙂','😉','😍','🥰','😘','😎','🥳','🤩','😢','😭','🥺','😡','🤔','😴','🤗','👍','👎','👏','🙌','🙏','💪','👋','👌','✌️','❤️','🧡','💛','💚','💙','💜','🖤','💔','🔥','✨','🎉','🎂','🎁','🌹','🌸','🌞','🌙','⭐','💯','💬','💋','🐱','🐶','🍕','☕','🎵','🎮','⚽','🚀','🇺🇦'];
+function kontaDialog(title){
+ document.querySelector('.konta-ui-backdrop')?.remove();
+ const backdrop=document.createElement('div');backdrop.className='konta-ui-backdrop';backdrop.setAttribute('role','presentation');
+ const dialog=document.createElement('section');dialog.className='konta-ui-dialog';dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');
+ const heading=document.createElement('div');heading.className='konta-ui-heading';
+ const h=document.createElement('h2');h.textContent=title;
+ const close=document.createElement('button');close.type='button';close.className='konta-ui-close';close.textContent='✕';close.setAttribute('aria-label','Закрити');close.onclick=()=>backdrop.remove();
+ heading.append(h,close);dialog.append(heading);backdrop.append(dialog);
+ backdrop.addEventListener('click',e=>{if(e.target===backdrop)backdrop.remove()});
+ const escape=e=>{if(e.key==='Escape'){backdrop.remove();document.removeEventListener('keydown',escape)}};
+ document.addEventListener('keydown',escape,{once:false});
+ document.body.append(backdrop);close.focus();return {backdrop,dialog};
+}
+function openEmojiGrid(input,chat=false){
+ if(!input)return;
+ const {backdrop,dialog}=kontaDialog('Вибери смайлик');
+ const grid=document.createElement('div');grid.className='konta-emoji-grid';
+ for(const emoji of KONTA_EMOJIS){const btn=document.createElement('button');btn.type='button';btn.textContent=emoji;btn.setAttribute('aria-label','Вставити '+emoji);
+ btn.onclick=()=>{const start=input.selectionStart??input.value.length,end=input.selectionEnd??start;const limit=input.maxLength>0?input.maxLength:2000;
+ const value=input.value.slice(0,start)+emoji+input.value.slice(end);if(value.length>limit)return;
+ input.value=value;input.selectionStart=input.selectionEnd=start+emoji.length;input.dispatchEvent(new Event('input',{bubbles:true}));if(chat)messageDrafts.set(state.chatId,input.value);
+ backdrop.remove();input.focus()};grid.append(btn)}
+ dialog.append(grid);
+}
+function openFriendShare(post){
+ const friends=friendIds().map(uid=>({id:uid,profile:byId(uid)})).sort((a,b)=>(a.profile?.display_name||'').localeCompare(b.profile?.display_name||'','uk'));
+ const {backdrop,dialog}=kontaDialog('Поділитися дописом');
+ const search=document.createElement('input');search.type='search';search.className='konta-share-search';search.placeholder='Пошук друга за іменем або ніком';search.setAttribute('aria-label','Пошук друга');
+ const list=document.createElement('div');list.className='konta-share-list';
+ const url=location.origin+location.pathname+'#post='+encodeURIComponent(post.id);
+ const status=document.createElement('p');status.className='konta-share-status';status.setAttribute('role','status');
+ function draw(){list.replaceChildren();const query=search.value.trim().toLocaleLowerCase('uk-UA');
+ const matches=friends.filter(f=>((f.profile?.display_name||'')+' '+(f.profile?.username||'')).toLocaleLowerCase('uk-UA').includes(query));
+ if(!matches.length){const empty=document.createElement('p');empty.className='konta-share-empty';empty.textContent=friends.length?'Нікого не знайдено':'Поки немає друзів';list.append(empty)}
+ for(const friend of matches){const row=document.createElement('button');row.type='button';row.className='konta-share-person';
+ const av=document.createElement('span');av.className='konta-share-avatar';const img=imageSrc(friend.profile?.avatar_url);
+ if(img){const photo=document.createElement('img');photo.src=friend.profile.avatar_url;photo.alt='';av.append(photo)}else av.textContent=initials(friend.profile);
+ const details=document.createElement('span');details.className='konta-share-person-info';const name=document.createElement('strong');name.textContent=friend.profile?.display_name||'Користувач';
+ const nick=document.createElement('small');nick.textContent='@'+(friend.profile?.username||'konta');details.append(name,nick);
+ const action=document.createElement('span');action.textContent='Надіслати';action.className='konta-share-send';
+ row.append(av,details,action);row.onclick=async()=>{row.disabled=true;action.textContent='Надсилаємо…';
+ const {error}=await db.from('private_messages').insert({sender_id:me(),recipient_id:friend.id,body:'Поділився(-лася) дописом у КОНТА: '+url});
+ if(error){status.textContent=errText(error);row.disabled=false;action.textContent='Повторити';return}
+ action.textContent='✓ Надіслано';toast('Допис надіслано: '+name.textContent);
+ };list.append(row)}}
+ search.addEventListener('input',draw);dialog.append(search,list,status);
+ const copy=document.createElement('button');copy.type='button';copy.className='konta-share-copy';copy.textContent='🔗 Скопіювати посилання';copy.onclick=async()=>{try{await navigator.clipboard.writeText(url);toast('Посилання скопійовано')}catch(e){status.textContent='Не вдалося скопіювати посилання'}};dialog.append(copy);
+ draw();search.focus();
+}
+
 function storyStrip(){
  const followed=new Set([...friendIds(),...state.follows.filter(f=>f.follower_id===me()).map(f=>f.followed_id),me()]);
  const visible=state.stories.filter(st=>followed.has(st.user_id)&&new Date(st.expires_at)>new Date());
@@ -600,28 +653,11 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'chat-copy':{const m=state.messages.find(x=>x.id===id&&((x.sender_id===me()&&x.recipient_id===state.chatId)||(x.recipient_id===me()&&x.sender_id===state.chatId)));if(!m)break;if(navigator.clipboard){await navigator.clipboard.writeText(m.body);toast('Повідомлення скопійовано');}else toast('Копіювання недоступне у браузері');break}
  case 'chat-delete':{const m=state.messages.find(x=>x.id===id&&x.sender_id===me());if(!m)break;if(!confirm('Видалити своє повідомлення в обох учасників розмови?'))break;const {error}=await db.from('private_messages').delete().eq('id',m.id).eq('sender_id',me());if(error)throw error;if(state.chatEditId===id)state.chatEditId=null;if(state.chatReplyId===id)state.chatReplyId=null;await afterChange('Повідомлення видалено');break}
 
- case 'emoji-insert':{const el=$('#messageForm textarea');if(!el)break;const emoji=prompt('Вибери емодзі або встав свій:', '😀 😁 😂 🤣 😊 😍 🥰 😘 😎 🥳 😢 😭 😡 🤔 👍 👎 ❤️ 💙 💚 🔥 🎉 🙌 👏 💯');if(!emoji)break;const start=el.selectionStart,end=el.selectionEnd;el.value=el.value.slice(0,start)+emoji.trim()+el.value.slice(end);el.selectionStart=el.selectionEnd=start+emoji.trim().length;messageDrafts.set(state.chatId,el.value);el.focus();break} 
+ case 'emoji-insert':{openEmojiGrid($('#messageForm textarea'),true);break}
  case 'post-find':{const p=state.posts.find(p=>p.id===id);if(p?.community_id)go('group',{groupId:p.community_id});else go('feed');setTimeout(()=>$('#post-'+id)?.scrollIntoView({behavior:'smooth',block:'center'}),80);break}
- case 'share':{
-  const p=state.posts.find(p=>p.id===id);if(!p)break;
-  const url=location.origin+location.pathname+'#post='+encodeURIComponent(p.id);
-  const friends=friendIds().map(uid=>({id:uid,name:byId(uid)?.display_name||'Користувач'}));
-  const options=friends.map((f,i)=>`${i+1}. ${f.name}`).join('\n');
-  const choice=prompt('Поділитися дописом у КОНТА:\n'+(options||'Поки немає друзів')+'\n\nВведи номер друга або 0, щоб скопіювати посилання:','0');
-  if(choice===null)break;
-  const selected=Number(choice);
-  if(Number.isInteger(selected)&&selected>=1&&selected<=friends.length){
-   const friend=friends[selected-1];
-   const {error}=await db.from('private_messages').insert({sender_id:me(),recipient_id:friend.id,body:'Поділився(-лася) дописом у КОНТА: '+url});
-   if(error)throw error;
-   toast('Допис надіслано: '+friend.name);
-  }else if(choice.trim()==='0'){
-   if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Посилання скопійовано')}else toast(url);
-  }else toast('Вибери номер друга зі списку');
-  break;
- }
+ case 'share':{const p=state.posts.find(p=>p.id===id);if(p)openFriendShare(p);break}
  case 'post-likers':{const people=state.likes.filter(l=>l.post_id===id).map(l=>byId(l.user_id)?.display_name||'Користувач KONTA');alert(people.length?'Вподобали допис:\n'+people.join('\n'):'Поки немає вподобань');break}
- case 'emoji-comment':{const input=$(`#post-${id} .comment-form input`);if(!input)break;const emoji=prompt('Вибери емодзі та скопіюй у поле:', '😀 😃 😄 😁 😂 🥰 😍 😎 😢 😭 😡 👍 ❤️ 🔥 🎉 🙌 💙');if(emoji){input.value=(input.value+' '+emoji.trim()).slice(0,500);input.focus()}break}
+ case 'emoji-comment':{openEmojiGrid($(`#post-${id} .comment-form input`));break}
  case 'poll-vote':{const option=state.pollOptions.find(o=>o.id===id);if(!option)break;const {error}=await db.from('poll_votes').insert({poll_id:option.poll_id,option_id:id,user_id:me()});if(error)throw error;await loadAll(true);render();toast('Голос враховано');break}
  case 'post-like':await togglePostLike(id);break;
  case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;state.posts=state.posts.filter(x=>x.id!==id);document.getElementById('post-'+id)?.remove();toast('Допис видалено');break}
