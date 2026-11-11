@@ -109,3 +109,32 @@ html[data-theme="dark"] .kp-notice-text strong{color:#ecf3ff}
 html[data-theme="dark"] .bottom-nav button[data-nav="notifications"].has-unread::after{border-color:#202b3c}
 
 @media (max-width:370px){.kp-profile .profile-stats b{font-size:17px}.kp-profile .profile-stats button{font-size:10px;padding:8px 1px}}
+
+/* Dialogs opened by emoji and share buttons must honor KONTA's dark theme. */
+html[data-theme="dark"] .konta-ui-backdrop{background:rgba(0,0,0,.78)}
+html[data-theme="dark"] .konta-ui-dialog{
+ background:var(--surface,#202b3c)!important;
+ color:var(--text,#e8effb)!important;
+ border:1px solid var(--line,#34445c)!important;
+ box-shadow:0 18px 55px rgba(0,0,0,.55);
+ color-scheme:dark;
+}
+html[data-theme="dark"] .konta-ui-heading{border-bottom:1px solid var(--line,#34445c);padding-bottom:10px}
+html[data-theme="dark"] .konta-ui-heading h2,
+html[data-theme="dark"] .konta-ui-close,
+html[data-theme="dark"] .konta-share-person,
+html[data-theme="dark"] .konta-share-person-info strong{color:var(--text,#e8effb)!important}
+html[data-theme="dark"] .konta-emoji-grid button{background:transparent;color:var(--text,#e8effb)}
+html[data-theme="dark"] .konta-emoji-grid button:hover,
+html[data-theme="dark"] .konta-emoji-grid button:focus-visible{background:#354760}
+html[data-theme="dark"] .konta-share-search{background:#182335!important;color:#e8effb!important;border:1px solid #445773!important}
+html[data-theme="dark"] .konta-share-search::placeholder{color:#9aaec5}
+html[data-theme="dark"] .konta-share-person{background:transparent;border-bottom-color:#36475d}
+html[data-theme="dark"] .konta-share-person:hover{background:#2a3b52}
+html[data-theme="dark"] .konta-share-avatar{background:#354b68;color:#dceaff}
+html[data-theme="dark"] .konta-share-person-info small,
+html[data-theme="dark"] .konta-share-empty,
+html[data-theme="dark"] .konta-share-status{color:#a9b8ca}
+html[data-theme="dark"] .konta-share-send{color:#9bc4ff}
+html[data-theme="dark"] .konta-share-copy{background:#2b405a;color:#e8effb;border-color:#526987}
+html[data-theme="dark"] .konta-share-copy:hover{background:#365171}
