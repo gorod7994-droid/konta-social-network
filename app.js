@@ -334,7 +334,7 @@ function viewProfile(){
  <section class="classic-profile-main">
   <div class="panel profile-summary"><div class="kp-mobile-identity">${avatar(p,'lg')}<div class="kp-mobile-identity-name"><strong>${esc(p.display_name)}${verifiedBadge(p)}</strong><span>@${esc(p.username)}</span>${presenceLabel(p)}</div></div>
    <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}${verifiedBadge(p)}</h1><span class="kp-handle">@${esc(p.username)}</span>${presenceLabel(p)}<span class="kp-member-pill">✦ У KONTA</span></div>
-   <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong><span>Зареєстрований:</span><strong>${esc(new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'long',year:'numeric'}).format(new Date(p.created_at)))}</strong></div>
+   <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong></div>
    <div class="profile-classic-actions">${actions}</div>
    <div class="profile-stats"><button ${own?'data-nav="friends"':'type="button" disabled title="Загальна кількість друзів недоступна"'}><b>${own?friends.length:'—'}</b>друзів</button><button ${own?'data-nav="photos"':'type="button" disabled'}><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button ${own?'data-nav="groups"':'type="button" disabled'}><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button><button type="button" disabled><b>${followerCount}</b>підписників</button></div>
   </div>
