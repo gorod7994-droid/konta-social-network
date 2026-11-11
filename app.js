@@ -22,6 +22,7 @@ const me = () => state.user?.id;
 const byId = id => state.profiles.find(p=>p.id===id) || (id===me() ? state.profile : null);
 const myName = () => state.profile?.display_name || state.user?.email?.split('@')[0] || 'Ти';
 const initials = p => ((p?.display_name||'K').trim().charAt(0)||'K').toUpperCase();
+function verifiedBadge(p){return p?.is_verified?'<span class="konta-verified" title="Офіційний акаунт КОНТА" aria-label="Підтверджений акаунт">✓</span>':''}
 function avatar(p,cls=''){const url=imageSrc(p?.avatar_url);return `<span class="avatar ${cls}">${url?`<img src="${url}" alt="">`:esc(initials(p))}</span>`;}
 function feedback(selector,message,isError=false){const el=$(selector);if(el){el.textContent=message;el.classList.toggle('is-error',isError)}}
 function toast(text){const node=$('#toast');node.textContent=text;node.classList.add('show');clearTimeout(lastToastTimer);lastToastTimer=setTimeout(()=>node.classList.remove('show'),3200)}
@@ -102,7 +103,7 @@ async function afterChange(message){await loadAll(true);if(message)toast(message
 function friendRecord(id){return state.friends.find(f=>(f.requester_id===me()&&f.addressee_id===id)||(f.addressee_id===me()&&f.requester_id===id))}
 function friendIds(){return state.friends.filter(f=>f.status==='accepted').map(f=>f.requester_id===me()?f.addressee_id:f.requester_id)}
 function friendAction(id){if(id===me())return '';const f=friendRecord(id);if(!f)return `<button class="btn primary small" data-action="friend-add" data-id="${id}">＋ У друзі</button>`;if(f.status==='accepted')return `<button class="btn secondary small" data-action="friend-remove" data-id="${id}">✓ Друзі</button>`;if(f.status==='pending'&&f.requester_id===me())return `<button class="btn secondary small" data-action="friend-remove" data-id="${id}">Очікує</button>`;if(f.status==='pending')return `<span class="request-actions"><button class="btn primary small" data-action="friend-accept" data-id="${id}">Прийняти</button><button class="btn secondary small" data-action="friend-remove" data-id="${id}">Ні</button></span>`;return `<button class="btn primary small" data-action="friend-remove" data-id="${id}">Скасувати</button>`}
-function personRow(p,controls=true){return `<div class="person-row">${avatar(p)}<div class="person-text"><strong><a href="#" data-action="profile-open" data-id="${esc(p.id)}">${esc(p.display_name)}</a></strong><small>@${esc(p.username)} ${p.bio?'· '+esc(p.bio.slice(0,38)):''}</small></div>${controls?friendAction(p.id):''}</div>`}
+function personRow(p,controls=true){return `<div class="person-row">${avatar(p)}<div class="person-text"><strong><a href="#" data-action="profile-open" data-id="${esc(p.id)}">${esc(p.display_name)}${verifiedBadge(p)}</a></strong><small>@${esc(p.username)} ${p.bio?'· '+esc(p.bio.slice(0,38)):''}</small></div>${controls?friendAction(p.id):''}</div>`}
 
 function cleanPeopleQuery(value){return String(value||'').trim().replace(/^@+/,'').replace(/\s+/g,' ').slice(0,65).toLocaleLowerCase('uk-UA')}
 function personRank(person,q){
@@ -244,7 +245,7 @@ function openFriendShare(post){
  for(const friend of matches){const row=document.createElement('button');row.type='button';row.className='konta-share-person';
  const av=document.createElement('span');av.className='konta-share-avatar';const img=imageSrc(friend.profile?.avatar_url);
  if(img){const photo=document.createElement('img');photo.src=friend.profile.avatar_url;photo.alt='';av.append(photo)}else av.textContent=initials(friend.profile);
- const details=document.createElement('span');details.className='konta-share-person-info';const name=document.createElement('strong');name.textContent=friend.profile?.display_name||'Користувач';
+ const details=document.createElement('span');details.className='konta-share-person-info';const name=document.createElement('strong');name.textContent=friend.profile?.display_name||'Користувач';if(friend.profile?.is_verified){const mark=document.createElement('span');mark.className='konta-verified';mark.textContent='✓';name.append(mark)}
  const nick=document.createElement('small');nick.textContent='@'+(friend.profile?.username||'konta');details.append(name,nick);
  const action=document.createElement('span');action.textContent='Надіслати';action.className='konta-share-send';
  row.append(av,details,action);row.onclick=async()=>{row.disabled=true;action.textContent='Надсилаємо…';
