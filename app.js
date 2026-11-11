@@ -22,6 +22,11 @@ const me = () => state.user?.id;
 const byId = id => state.profiles.find(p=>p.id===id) || (id===me() ? state.profile : null);
 const myName = () => state.profile?.display_name || state.user?.email?.split('@')[0] || 'Ти';
 const initials = p => ((p?.display_name||'K').trim().charAt(0)||'K').toUpperCase();
+function presenceLabel(p){const t=p?.last_seen_at?new Date(p.last_seen_at).getTime():0;if(!t)return '<span class="konta-presence offline">ще не був(-ла) в мережі</span>';const age=Date.now()-t;return age<120000?'<span class="konta-presence online"><i class="konta-online-dot"></i>у мережі</span>':'<span class="konta-presence offline">був(-ла) в мережі '+esc(fmtTime(p.last_seen_at))+'</span>'}
+let lastPresencePing=0;
+async function pingPresence(){if(!state.user||document.visibilityState!=='visible'||Date.now()-lastPresencePing<45000)return;lastPresencePing=Date.now();const now=new Date().toISOString();const {error}=await db.from('profiles').update({last_seen_at:now}).eq('id',me());if(!error){const p=byId(me());if(p)p.last_seen_at=now;if(state.profile)state.profile.last_seen_at=now}}
+setInterval(()=>{pingPresence()},60000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pingPresence()});
 function verifiedBadge(p){return p?.is_verified?'<span class="konta-verified" title="Офіційний акаунт КОНТА" aria-label="Підтверджений акаунт">✓</span>':''}
 function avatar(p,cls=''){const url=imageSrc(p?.avatar_url);return `<span class="avatar ${cls}">${url?`<img src="${url}" alt="">`:esc(initials(p))}</span>`;}
 function feedback(selector,message,isError=false){const el=$(selector);if(el){el.textContent=message;el.classList.toggle('is-error',isError)}}
@@ -90,7 +95,7 @@ async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refre
    for(const p of state.searchRemoteMatches)if(!known.has(p.id)){state.profiles.push(p);known.add(p.id)}
   }
   if(window.KONTA_CLASSIC){state.preferences=window.KONTA_CLASSIC.applyPreferences(state.preferences);if(state.prefsAppliedForUser!==id){state.feedFilter=state.preferences.feed_default;state.prefsAppliedForUser=id;}}
-  state.profile=byId(id);initialLoadError=state.profile?null:'Профіль не знайдено. Запусти SETUP_SUPABASE.sql у SQL Editor.';
+  state.profile=byId(id);pingPresence();initialLoadError=state.profile?null:'Профіль не знайдено. Запусти SETUP_SUPABASE.sql у SQL Editor.';
   if(!quiet)toast('Дані оновлено');
  }catch(error){initialLoadError=errText(error);if(!quiet)toast(initialLoadError)}finally{refreshInFlight=false;showApp(changed)}}
 async function signedIn(user){if(!user)return;if(state.user?.id===user.id&&authBoot)return;state.user=user;authBoot=true;$('#authScreen').hidden=true;$('#app').hidden=false;$('#main').innerHTML='<div class="loading-card">Завантажуємо твою сторінку…</div>';await loadAll(true);subscribeLive();const linkedPost=new URLSearchParams(location.hash.slice(1)).get('post');if(idOK(linkedPost)){const linked=state.posts.find(p=>p.id===linkedPost);if(linked){if(linked.community_id)go('group',{groupId:linked.community_id});else go('feed');setTimeout(()=>$('#post-'+linkedPost)?.scrollIntoView({block:'center'}),150)}}if(!pollId)pollId=setInterval(()=>{if(document.visibilityState==='visible'&&state.user)loadAll(true)},25000);}
@@ -197,7 +202,7 @@ function postCard(p){
  const expanded=expandedComments.has(p.id);const shown=expanded?roots:[];
  const commentsHtml=shown.map(c=>renderCommentNode(c,children)).join('');
  return `<article class="post" id="post-${esc(p.id)}">
- <div class="post-head">${avatar(author)}<div class="post-identity"><strong data-action="profile-open" data-id="${esc(p.user_id)}">${esc(author.display_name)}</strong><small>@${esc(author.username)} · ${esc(fmtTime(p.created_at))}${group?` · <a href="#" data-action="group-open" data-id="${esc(group.id)}">${esc(group.name)}</a>`:''}</small></div></div>
+ <div class="post-head">${avatar(author)}<div class="post-identity"><strong data-action="profile-open" data-id="${esc(p.user_id)}">${esc(author.display_name)}${verifiedBadge(author)}</strong><small>@${esc(author.username)} · ${esc(fmtTime(p.created_at))}${group?` · <a href="#" data-action="group-open" data-id="${esc(group.id)}">${esc(group.name)}</a>`:''}</small></div></div>
  ${p.body?`<div class="post-text">${esc(p.body)}</div>`:''}${pollCard(p.id)}${postMedia(p.media_url)}
  <div class="post-actions"><button data-action="post-like" data-id="${esc(p.id)}" class="${liked?'is-liked':''}"><span>${liked?'♥':'♡'}</span>${postLikes.length}</button>${postLikes.length?`<button type="button" data-action="post-likers" data-id="${esc(p.id)}" aria-label="Переглянути, кому сподобався допис">Хто вподобав</button>`:''}<button data-action="comment-focus" data-id="${esc(p.id)}"><span>▢</span>${comments.length} коментарів</button><button data-action="share" data-id="${esc(p.id)}"><span>↗</span>Поділитись</button>${p.user_id===me()?`<button class="post-delete" title="Видалити допис" data-action="post-delete" data-id="${esc(p.id)}">✕</button>`:''}</div>
  <div class="comment-area" ${expanded?'':'hidden'}>${roots.length>3?`<button type="button" class="comment-more" data-action="comment-expand" data-id="${esc(p.id)}">${expanded?'Згорнути коментарі':`Показати всі коментарі (${comments.length})`}</button>`:''}
@@ -327,8 +332,8 @@ function viewProfile(){
   <div class="panel"><h3 class="classic-section-title">Фотографії <span>${photoUrls.length}</span></h3><div class="classic-peek"><div class="classic-mini-photos">${images||'<span class="subtle">Поки немає фото</span>'}</div></div></div>
  </aside>
  <section class="classic-profile-main">
-  <div class="panel profile-summary"><div class="kp-mobile-identity">${avatar(p,'lg')}<div class="kp-mobile-identity-name"><strong>${esc(p.display_name)}</strong><span>@${esc(p.username)}</span></div></div>
-   <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}</h1><span class="kp-handle">@${esc(p.username)}</span><span class="kp-member-pill">✦ У KONTA</span></div>
+  <div class="panel profile-summary"><div class="kp-mobile-identity">${avatar(p,'lg')}<div class="kp-mobile-identity-name"><strong>${esc(p.display_name)}${verifiedBadge(p)}</strong><span>@${esc(p.username)}</span>${presenceLabel(p)}</div></div>
+   <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}${verifiedBadge(p)}</h1><span class="kp-handle">@${esc(p.username)}</span>${presenceLabel(p)}<span class="kp-member-pill">✦ У KONTA</span></div>
    <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong><span>У KONTA:</span><strong>${esc(fmtTime(p.created_at))}</strong></div>
    <div class="profile-classic-actions">${actions}</div>
    <div class="profile-stats"><button ${own?'data-nav="friends"':'type="button" disabled title="Загальна кількість друзів недоступна"'}><b>${own?friends.length:'—'}</b>друзів</button><button ${own?'data-nav="photos"':'type="button" disabled'}><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button ${own?'data-nav="groups"':'type="button" disabled'}><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button><button type="button" disabled><b>${followerCount}</b>підписників</button></div>

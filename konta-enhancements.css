@@ -147,3 +147,11 @@ html[data-theme="dark"] .konta-story.add .story-ring{border-color:#6c8fbd!import
 html[data-theme="dark"] .story-empty,html[data-theme="dark"] .konta-story small{color:#b5c5d9!important}
 .konta-verified{display:inline-grid;place-items:center;width:17px;height:17px;margin-left:5px;vertical-align:middle;border-radius:50%;background:#2587ef;color:#fff;font-size:12px;font-weight:900;line-height:1;box-shadow:0 0 0 1px rgba(255,255,255,.14)}
 html[data-theme="dark"] .konta-verified{background:#3c96ff;color:#fff}
+
+/* Verified identity and presence, on both mobile and desktop profile headers. */
+.profile-classic-name .konta-verified,.kp-mobile-identity-name .konta-verified{width:20px;height:20px;font-size:14px;margin-left:8px;vertical-align:middle}
+.konta-presence{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:400;line-height:1.4;margin:3px 0;color:var(--muted,#8292a7);white-space:normal}
+.konta-presence.online{color:#28b876}
+.konta-online-dot{display:inline-block;width:8px;height:8px;flex:none;border-radius:50%;background:#20c477;box-shadow:0 0 0 2px rgba(32,196,119,.14)}
+.kp-mobile-identity-name .konta-presence{display:flex}
+.profile-classic-name .konta-verified{position:relative;top:-1px}
