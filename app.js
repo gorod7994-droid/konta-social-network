@@ -9,6 +9,9 @@ const fmtTime = value => {const d=new Date(value); if(Number.isNaN(d.valueOf()))
 const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
 const expandedComments = new Set();
 const messageDrafts = new Map();
+const pendingReactions = new Set();
+let peopleSearchTimer=null,peopleSearchVersion=0;
+state.searchRemoteQuery='';state.searchRemoteMatches=[];state.friendSearch='';
 const conf=window.KONTA_CONFIG || {};
 const configured = /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(conf.supabaseUrl||'') && /^(sb_publishable_|eyJ)/.test(conf.supabasePublishableKey||'');
 const db = configured && window.supabase?.createClient ? window.supabase.createClient(conf.supabaseUrl,conf.supabasePublishableKey,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}}) : null;
@@ -61,6 +64,66 @@ function friendRecord(id){return state.friends.find(f=>(f.requester_id===me()&&f
 function friendIds(){return state.friends.filter(f=>f.status==='accepted').map(f=>f.requester_id===me()?f.addressee_id:f.requester_id)}
 function friendAction(id){if(id===me())return '';const f=friendRecord(id);if(!f)return `<button class="btn primary small" data-action="friend-add" data-id="${id}">＋ У друзі</button>`;if(f.status==='accepted')return `<button class="btn secondary small" data-action="friend-remove" data-id="${id}">✓ Друзі</button>`;if(f.status==='pending'&&f.requester_id===me())return `<button class="btn secondary small" data-action="friend-remove" data-id="${id}">Очікує</button>`;if(f.status==='pending')return `<span class="request-actions"><button class="btn primary small" data-action="friend-accept" data-id="${id}">Прийняти</button><button class="btn secondary small" data-action="friend-remove" data-id="${id}">Ні</button></span>`;return `<button class="btn primary small" data-action="friend-remove" data-id="${id}">Скасувати</button>`}
 function personRow(p,controls=true){return `<div class="person-row">${avatar(p)}<div class="person-text"><strong><a href="#" data-action="profile-open" data-id="${esc(p.id)}">${esc(p.display_name)}</a></strong><small>@${esc(p.username)} ${p.bio?'· '+esc(p.bio.slice(0,38)):''}</small></div>${controls?friendAction(p.id):''}</div>`}
+
+function cleanPeopleQuery(value){return String(value||'').trim().replace(/^@+/,'').replace(/\s+/g,' ').slice(0,65).toLocaleLowerCase('uk-UA')}
+function personRank(person,q){
+ const username=(person.username||'').toLocaleLowerCase('uk-UA'),name=(person.display_name||'').toLocaleLowerCase('uk-UA');
+ return username===q?0:username.startsWith(q)?1:name===q?2:name.startsWith(q)?3:username.includes(q)?4:name.includes(q)?5:6;
+}
+function matchPeople(q){
+ const query=cleanPeopleQuery(q);
+ const pool=[...state.profiles,...(state.searchRemoteQuery===query?state.searchRemoteMatches:[])];
+ const seen=new Set();
+ return pool.filter(p=>{if(!p||!p.id||seen.has(p.id)||p.id===me())return false;seen.add(p.id);return !query||[p.username,p.display_name,p.bio].some(v=>(v||'').toLocaleLowerCase('uk-UA').includes(query))})
+ .sort((a,b)=>query?personRank(a,query)-personRank(b,query)||a.display_name.localeCompare(b.display_name,'uk-UA'):a.display_name.localeCompare(b.display_name,'uk-UA'));
+}
+function repaintPeopleResults(){
+ const area=$('#searchResults');
+ if(area&&state.view==='explore')area.innerHTML=searchResultsHtml(state.search);
+ const friends=$('#friendsSearchResults');
+ if(friends&&state.view==='friends'&&state.friendsTab==='people'){
+  const matched=matchPeople(state.friendSearch);
+  friends.innerHTML=matched.length?matched.slice(0,80).map(p=>personRow(p)).join(''):'<div class="empty">Нікого не знайдено. Спробуй ім’я або @нік.</div>';
+ }
+ const dropdown=$('#topSearchResults'),input=$('#topSearch');
+ if(dropdown&&input){
+  const text=cleanPeopleQuery(input.value);
+  if(!text||text.length<2){dropdown.hidden=true;dropdown.innerHTML='';return}
+  const people=matchPeople(text).slice(0,6);
+  dropdown.hidden=false;
+  dropdown.innerHTML='<div class="instant-search-heading">Люди в KONTA</div>'+(
+   people.length?people.map(p=>'<button type="button" data-action="profile-open" data-id="'+esc(p.id)+'" class="instant-person">'+avatar(p,'sm')+'<span><b>'+esc(p.display_name)+'</b><small>@'+esc(p.username)+'</small></span></button>').join(''):'<div class="instant-no-matches">Поки немає збігів — натисни Enter для повного пошуку</div>'
+  )+'<button type="button" class="instant-search-more" data-nav="explore">⌕ Повний пошук</button>';
+ }
+}
+function schedulePeopleSearch(query){
+ const q=cleanPeopleQuery(query),version=++peopleSearchVersion;
+ clearTimeout(peopleSearchTimer);
+ state.searchRemoteQuery='';
+ state.searchRemoteMatches=[];
+ repaintPeopleResults();
+ if(!db||q.length<2)return;
+ peopleSearchTimer=setTimeout(async()=>{
+  // Use parameterized PostgREST filters, not hand-written .or() SQL strings.
+  // Remove wildcard characters so searching by a literal nickname stays predictable.
+  const safe=q.replace(/[%_\\]/g,'').trim();
+  if(safe.length<2)return;
+  const terms=[db.from('profiles').select('id,username,display_name,bio,avatar_url,created_at').ilike('username','%'+safe+'%').limit(60),
+               db.from('profiles').select('id,username,display_name,bio,avatar_url,created_at').ilike('display_name','%'+safe+'%').limit(60)];
+  try{
+   const replies=await Promise.all(terms);
+   if(version!==peopleSearchVersion||!state.user)return;
+   const found=[],seen=new Set();
+   for(const result of replies){if(result.error)throw result.error;for(const p of result.data||[]){if(!seen.has(p.id)){seen.add(p.id);found.push(p)}}}
+   state.searchRemoteQuery=q;state.searchRemoteMatches=found;
+   // Keep fetched profiles addressable when someone opens a result beyond the initial list.
+   const cached=new Set(state.profiles.map(p=>p.id));
+   for(const p of found)if(!cached.has(p.id)){state.profiles.push(p);cached.add(p.id)}
+   repaintPeopleResults();
+  }catch(error){if(version===peopleSearchVersion){state.searchRemoteQuery='';state.searchRemoteMatches=[];repaintPeopleResults();console.warn('KONTA people search:',errText(error));}}
+ },300);
+}
+
 function renderSuggestions(){const candidates=state.profiles.filter(p=>p.id!==me()&&!friendRecord(p.id)).slice(0,4);$('#suggestions').innerHTML=candidates.map(p=>personRow(p)).join('')||'<p class="subtle">Запроси друзів — вони з’являться тут.</p>';const count=state.friends.filter(f=>f.status==='pending'&&f.addressee_id===me()).length;$('#requestsBubble').hidden=!count;$('#requestsBubble').textContent=count;const unread=state.notifications.some(n=>!n.is_read);$('#noticeDot').hidden=!unread}
 function header(title,right=''){return `<div class="panel-header"><h2>${esc(title)}</h2>${right}</div>`}
 function composer(){return `<div class="panel composer-teaser">${avatar(state.profile)}<button data-action="post-open">Що нового, ${esc(myName().split(' ')[0])}?</button><button class="tiny-action" title="Фото" data-action="post-open">▧</button></div>`}
@@ -135,8 +198,12 @@ function viewProfile(){
  </section>
  </div>`;
 }
-function viewFriends(){const allFriends=state.friends.filter(f=>f.status==='accepted').map(f=>byId(f.requester_id===me()?f.addressee_id:f.requester_id)).filter(Boolean);const incoming=state.friends.filter(f=>f.status==='pending'&&f.addressee_id===me()).map(f=>byId(f.requester_id)).filter(Boolean);const outgoing=state.friends.filter(f=>f.status==='pending'&&f.requester_id===me()).map(f=>byId(f.addressee_id)).filter(Boolean);let current=state.friendsTab==='requests'?incoming:state.friendsTab==='outgoing'?outgoing:state.friendsTab==='all'?allFriends:state.profiles.filter(p=>p.id!==me());return `<h1 class="page-title">Друзі</h1><div class="panel">${tabs([['all',`Друзі (${allFriends.length})`],['requests',`Заявки (${incoming.length})`],['outgoing','Надіслані'],['people','Знайти людей']],state.friendsTab,'friends-tab')}<div class="person-list">${current.length?current.map(p=>personRow(p)).join(''):`<div class="empty">${state.friendsTab==='all'?'Поки немає друзів. Знайди когось через «Знайти людей».':'Тут поки що порожньо.'}</div>`}</div></div>`}
-function searchResultsHtml(q){const query=q.trim().toLowerCase();const people=state.profiles.filter(p=>p.id!==me()&&(!query||(p.display_name+' '+p.username+' '+p.bio).toLowerCase().includes(query))).slice(0,30);const posts=query?state.posts.filter(p=>(p.body+' '+(byId(p.user_id)?.display_name||'')).toLowerCase().includes(query)).slice(0,20):[];return `<div class="panel">${header(`Люди (${people.length})`)}<div class="person-list">${people.length?people.map(p=>personRow(p)).join(''):'<div class="empty">Нікого не знайдено</div>'}</div></div>${query?`<div class="section-heading">Дописи (${posts.length})</div>${posts.map(postCard).join('')}`:''}`}
+function viewFriends(){const allFriends=state.friends.filter(f=>f.status==='accepted').map(f=>byId(f.requester_id===me()?f.addressee_id:f.requester_id)).filter(Boolean);const incoming=state.friends.filter(f=>f.status==='pending'&&f.addressee_id===me()).map(f=>byId(f.requester_id)).filter(Boolean);const outgoing=state.friends.filter(f=>f.status==='pending'&&f.requester_id===me()).map(f=>byId(f.addressee_id)).filter(Boolean);let current=state.friendsTab==='requests'?incoming:state.friendsTab==='outgoing'?outgoing:state.friendsTab==='all'?allFriends:matchPeople(state.friendSearch);return `<h1 class="page-title">Друзі</h1><div class="panel">${tabs([['all',`Друзі (${allFriends.length})`],['requests',`Заявки (${incoming.length})`],['outgoing','Надіслані'],['people','Знайти людей']],state.friendsTab,'friends-tab')}${state.friendsTab==='people'?`<div class="people-search-wrap"><input id="friendsSearchInput" class="search-large" placeholder="Шукай за ім’ям або @ніком" autocomplete="off" value="${esc(state.friendSearch)}"></div>`:''}<div class="person-list" id="friendsSearchResults">${current.length?current.slice(0,80).map(p=>personRow(p)).join(''):`<div class="empty">${state.friendsTab==='all'?'Поки немає друзів. Знайди когось через «Знайти людей».':state.friendsTab==='people'?'Нікого не знайдено. Спробуй ім’я або @нік.':'Тут поки що порожньо.'}</div>`}</div></div>`}
+function searchResultsHtml(q){
+ const query=cleanPeopleQuery(q),people=matchPeople(q).slice(0,80);
+ const posts=query?state.posts.filter(p=>(p.body+' '+(byId(p.user_id)?.display_name||'')).toLocaleLowerCase('uk-UA').includes(query)).slice(0,20):[];
+ return '<div class="panel">'+header('Люди ('+people.length+')')+'<div class="person-list">'+(people.length?people.map(p=>personRow(p)).join(''):'<div class="empty">За цим іменем або @ніком нікого не знайдено.</div>')+'</div></div>'+(query?'<div class="section-heading">Дописи ('+posts.length+')</div>'+posts.map(postCard).join(''):'');
+}
 function viewExplore(){return `<h1 class="page-title">Пошук у KONTA</h1><div class="panel"><div class="panel-inner"><input class="search-large" id="exploreInput" placeholder="Ім’я, нікнейм або текст допису" value="${esc(state.search)}"></div></div><div id="searchResults">${searchResultsHtml(state.search)}</div>`}
 function viewPhotos(){return window.KONTA_MEDIA?.render('photo')||empty('Фотографії','Бібліотека завантажується.');}
 function viewVideos(){return window.KONTA_MEDIA?.render('video')||empty('Відео','Бібліотека завантажується.');}
@@ -179,7 +246,7 @@ function viewBookmarks(){const liked=state.posts.filter(p=>state.likes.some(l=>l
 function viewSettings(){return window.KONTA_CLASSIC?.renderSettings()||empty('Налаштування','Завантаження інтерфейсу...')}
 function viewNotifications(){const notices=state.notifications;const labels={friend:'надіслав(-ла) заявку в друзі',like:'вподобав(-ла) твій допис',comment:'прокоментував(-ла) твій допис',message:'написав(-ла) тобі повідомлення'};return `<h1 class="page-title">Сповіщення</h1><div class="panel">${header('Нові події','<button class="btn soft small" data-action="notice-read">Позначити прочитаними</button>')} ${notices.length?notices.map(n=>`<div class="notice ${n.is_read?'':'is-unread'}">${avatar(byId(n.actor_id),'sm')}<div class="notice-body"><a href="#" data-action="profile-open" data-id="${esc(n.actor_id)}">${esc(byId(n.actor_id)?.display_name||'Користувач')}</a> ${esc(labels[n.kind]||'є новина для тебе')}<small>${esc(fmtTime(n.created_at))}</small></div></div>`).join(''):'<div class="empty">Сповіщень поки немає</div>'}</div>`}
 function render(){if(!state.user)return;$$('[data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));renderSuggestions();const views={feed:viewFeed,profile:viewProfile,friends:viewFriends,explore:viewExplore,photos:viewPhotos,videos:viewVideos,music:viewMusic,settings:viewSettings,bookmarks:viewBookmarks,groups:viewGroups,group:viewGroup,messages:viewMessages,notifications:viewNotifications};$('#main').innerHTML=initialLoadError?setupError():(views[state.view]||viewFeed)();if(state.view==='messages'){$('#messageScroll')?.scrollTo(0,999999)} }
-function go(view,opts={}){state.view=view;if('userId'in opts)state.profileId=opts.userId;if('chatId'in opts)state.chatId=opts.chatId;if('groupId'in opts)state.groupId=opts.groupId;if('search'in opts)state.search=opts.search;render();if(window.innerWidth<720)window.scrollTo({top:0,behavior:'smooth'})}
+function go(view,opts={}){state.view=view;if('userId'in opts)state.profileId=opts.userId;if('chatId'in opts)state.chatId=opts.chatId;if('groupId'in opts)state.groupId=opts.groupId;if('search'in opts){state.search=opts.search;if(view==='explore')schedulePeopleSearch(state.search)}render();if(window.innerWidth<720)window.scrollTo({top:0,behavior:'smooth'})}
 function openPost(groupId=null){state.postGroupId=groupId;$('#postText').value='';$('#postFile').value='';$('#postFileLabel').textContent='До 8 МБ';$('#postPreview').hidden=true;feedback('#postFeedback','');$('#postDialog').showModal()}
 function openProfileEditor(){const p=state.profile;if(!p)return;$('#profileName').value=p.display_name;$('#profileUsername').value=p.username;$('#profileBio').value=p.bio||'';$('#avatarFile').value='';feedback('#profileFeedback','');$('#profileDialog').showModal()}
 function verifyFile(file,avatarMode=false){if(!file)return null;const types=avatarMode?['image/png','image/jpeg','image/webp']:['image/png','image/jpeg','image/webp','image/gif'];if(!types.includes(file.type))throw Error('Підтримуються лише JPG, PNG, WebP'+(avatarMode?'':' та GIF')+'.');if(file.size>8*1024*1024)throw Error('Зображення має бути не більше 8 МБ.');return file}
