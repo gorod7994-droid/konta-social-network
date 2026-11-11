@@ -1,0 +1,42 @@
+/* KONTA 9 — instant search, fast social actions. */
+.top-search{position:relative;z-index:51}
+.top-search input[type="search"]{appearance:none;-webkit-appearance:none;outline-offset:0}
+.top-search input::-webkit-search-cancel-button{cursor:pointer}
+.instant-search{
+ position:absolute;left:0;top:calc(100% + 9px);width:min(430px,calc(100vw - 30px));
+ max-height:min(65vh,460px);overflow:auto;
+ border:1px solid var(--modern-stroke,#d9e4f4);
+ background:var(--modern-surface,#fff);
+ box-shadow:0 22px 58px #1e38653a;
+ border-radius:16px;padding:8px;z-index:65;
+}
+.instant-search[hidden]{display:none!important}
+.instant-search-heading{font-size:11px;color:var(--modern-subtle,#8497ae);padding:8px 10px;font-weight:750;letter-spacing:.2px}
+.instant-person{display:flex;width:100%;align-items:center;gap:11px;border:0;background:transparent;border-radius:11px;padding:9px 10px;text-align:left;transition:background .14s}
+.instant-person:hover,.instant-person:focus-visible{background:var(--modern-primary-faint,#eaf1ff)}
+.instant-person span:not(.avatar){min-width:0;display:grid;gap:1px}
+.instant-person b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--modern-ink,#26364d)}
+.instant-person small{font-size:11px;color:var(--modern-subtle,#8194ad);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.instant-person .avatar.sm{width:36px;height:36px}
+.instant-no-matches{padding:15px 11px;color:var(--modern-subtle,#8194ad);font-size:12px;line-height:1.5}
+.instant-search-more{display:flex;justify-content:center;width:100%;border:0;background:var(--modern-primary-faint,#eaf1ff);color:var(--modern-primary,#3267e7);font-size:12px;font-weight:750;border-radius:11px;padding:12px 10px;margin-top:5px}
+.instant-search-more:hover{filter:brightness(.97)}
+.people-search-wrap{padding:14px 16px 4px}
+.people-search-wrap .search-large{font-size:13px;min-height:46px;background:var(--modern-surface-alt,#f6f9ff)}
+.person-list .person-row .person-text{min-width:0}
+.post-actions button[aria-pressed="true"]{color:#df6386}
+.post-actions button{transition:color .15s,background .15s}
+.comment-heart{transition:color .15s,transform .14s}
+.comment-heart.is-liked{color:#e15b83}
+.comment-heart:active,.post-actions button[data-action="post-like"]:active{transform:scale(.96)}
+@media(max-width:720px){
+ .top-search{z-index:80}
+ .instant-search{position:fixed;left:10px;right:10px;top:65px;width:auto;max-height:calc(100dvh - 169px);border-radius:15px;z-index:81}
+ .instant-person{min-height:55px}
+ .people-search-wrap{padding:11px 12px 3px}
+}
+html[data-theme="dark"] .instant-search{background:#202b3c;border-color:#34445c;box-shadow:0 22px 58px #0009}
+html[data-theme="dark"] .instant-person b{color:#eaf0ff}
+html[data-theme="dark"] .instant-person:hover{background:#304564}
+html[data-theme="dark"] .instant-search-more{background:#344c76;color:#c8d9ff}
+html[data-theme="dark"] .people-search-wrap .search-large{background:#283a52}
