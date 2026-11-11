@@ -10,7 +10,7 @@ const css=fs.readFileSync('classic.css','utf8');
 const modern=fs.readFileSync('modern.css','utf8');
 const searchCSS=fs.readFileSync('search-actions.css','utf8');
 
-for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','app.js?v=10','media.js?v=9','classic.js?v=9']){
+for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','konta-enhancements.css?v=1','app.js?v=11','media.js?v=9','classic.js?v=9']){
  assert.ok(html.includes(file),'Missing asset: '+file);
 }
 for(const section of ['photos','videos','music','bookmarks','settings']){
@@ -76,6 +76,17 @@ assert.ok(chats.includes('&lt;script&gt;'),'Escaped message missing');
 const profile=vm.runInContext('viewProfile()',context);
 assert.ok(profile.includes('profile-classic'),'Missing classic profile');
 assert.ok(profile.includes('Стіна'),'Missing profile wall');
+assert.ok(profile.includes('kp-cover'),'Profile cover missing');
+assert.ok(profile.includes('підписників'),'Follower count missing');
+vm.runInContext("state.profileId=state.profiles[1].id;",context);
+const otherProfile=vm.runInContext('viewProfile()',context);
+assert.ok(otherProfile.includes('data-action="follow-toggle"'),'Follow action missing');
+vm.runInContext("state.profileId=null;state.notifications=[{id:'f1f1f1f1-f1f1-41f1-81f1-f1f1f1f1f1f1',target_id:state.user.id,actor_id:state.profiles[1].id,kind:'follow',is_read:false,created_at:'2026-11-10T12:00:00Z'}]",context);
+const alerts=vm.runInContext('viewNotifications()',context);
+assert.ok(alerts.includes('підписався(-лася)'),'Follow notification missing');
+assert.ok(alerts.includes('data-action="notice-open"'),'Actionable notification missing');
+assert.ok(app.includes("case 'follow-toggle':{"),'Follow handling missing');
+assert.ok(app.includes("case 'notice-open':{"),'Notification route missing');
 const news=vm.runInContext('viewFeed()',context);
 assert.ok(news.includes('Спільноти')&&news.includes('Сподобалося'),'Missing news filters');
 assert.ok(news.includes('feed-hero'),'Modern welcome card missing');
