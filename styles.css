@@ -171,3 +171,33 @@
 .konta-poll-option.is-voted{border-color:#447fb4;background:rgba(68,127,180,.13);font-weight:700}
 .konta-poll-option:disabled{cursor:default;opacity:.95}
 .konta-post-audio{width:100%;margin:12px 0}
+
+/* Compact, calm stories strip */
+.konta-stories{padding:9px 12px!important;gap:9px!important;margin-bottom:10px!important;border-radius:12px!important;background:var(--card,#fff)!important;min-height:0!important}
+.konta-story{flex:0 0 58px!important;gap:4px!important;font-size:12px!important;min-width:0!important}
+.story-ring{width:46px!important;height:46px!important;border-width:2px!important;font-size:23px!important;border-color:#7b9ab9!important;background:transparent!important}
+.story-ring .avatar{width:40px!important;height:40px!important;font-size:15px!important}
+.konta-story.add .story-ring{color:#678ab0!important}
+.konta-story small{max-width:62px!important;font-size:11px!important}
+.story-empty{font-size:12px!important;white-space:nowrap;color:var(--muted,#7c8797);opacity:.75}
+.konta-ui-backdrop{position:fixed;inset:0;z-index:100000;background:rgba(16,25,38,.57);display:flex;justify-content:center;align-items:center;padding:14px}
+.konta-ui-dialog{box-sizing:border-box;width:min(100%,430px);max-height:min(80vh,690px);overflow:hidden;display:flex;flex-direction:column;background:var(--card,#fff);color:var(--text,#182331);border-radius:18px;padding:16px;box-shadow:0 16px 48px rgba(0,0,0,.22)}
+.konta-ui-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.konta-ui-heading h2{font-size:18px;margin:0}
+.konta-ui-close{border:0;background:transparent;color:inherit;font-size:19px;padding:6px 9px;cursor:pointer}
+.konta-emoji-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;overflow-y:auto;max-height:55vh;padding:3px}
+.konta-emoji-grid button{border:0;background:transparent;border-radius:9px;cursor:pointer;font-size:25px;min-height:43px;display:grid;place-items:center}
+.konta-emoji-grid button:active,.konta-emoji-grid button:focus-visible{background:rgba(106,147,201,.18);outline:2px solid #7299c4}
+.konta-share-search{width:100%;box-sizing:border-box;border:1px solid #c7d1df;border-radius:10px;padding:12px;background:var(--bg,#fff);color:inherit;font:inherit;margin-bottom:10px}
+.konta-share-list{overflow-y:auto;min-height:80px;max-height:48vh;overscroll-behavior:contain}
+.konta-share-person{display:flex;align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid rgba(120,130,150,.15);padding:11px 4px;text-align:left;background:transparent;color:inherit;cursor:pointer}
+.konta-share-person:disabled{opacity:.75}
+.konta-share-avatar{width:42px;height:42px;flex:0 0 42px;border-radius:50%;background:#e7eff9;color:#426992;display:grid;place-items:center;font-weight:700;overflow:hidden}
+.konta-share-avatar img{width:100%;height:100%;object-fit:cover}
+.konta-share-person-info{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.konta-share-person-info strong,.konta-share-person-info small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.konta-share-person-info small{color:var(--muted,#7b8794)}
+.konta-share-send{font-size:12px;color:#437cae;white-space:nowrap}
+.konta-share-copy{border:1px solid #b6c7d9;border-radius:10px;background:transparent;color:inherit;padding:12px;margin-top:12px;cursor:pointer}
+.konta-share-status,.konta-share-empty{font-size:13px;color:var(--muted,#7b8794);margin:8px 0}
+@media(max-width:380px){.konta-emoji-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
