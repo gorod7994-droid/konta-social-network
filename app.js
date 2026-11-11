@@ -181,14 +181,14 @@ function postCard(p){
  const comments=state.comments.filter(c=>c.post_id===p.id);
  const children=new Map();for(const c of comments){if(c.parent_id&&comments.some(p=>p.id===c.parent_id)){if(!children.has(c.parent_id))children.set(c.parent_id,[]);children.get(c.parent_id).push(c)}}
  const roots=comments.filter(c=>!c.parent_id||!comments.some(p=>p.id===c.parent_id));
- const expanded=expandedComments.has(p.id);const shown=expanded?roots:roots.slice(-3);
+ const expanded=expandedComments.has(p.id);const shown=expanded?roots:[];
  const commentsHtml=shown.map(c=>renderCommentNode(c,children)).join('');
  return `<article class="post" id="post-${esc(p.id)}">
  <div class="post-head">${avatar(author)}<div class="post-identity"><strong data-action="profile-open" data-id="${esc(p.user_id)}">${esc(author.display_name)}</strong><small>@${esc(author.username)} · ${esc(fmtTime(p.created_at))}${group?` · <a href="#" data-action="group-open" data-id="${esc(group.id)}">${esc(group.name)}</a>`:''}</small></div></div>
  ${p.body?`<div class="post-text">${esc(p.body)}</div>`:''}${imageSrc(p.media_url)?`<img class="post-photo" src="${imageSrc(p.media_url)}" alt="Фото допису" loading="lazy">`:''}
- <div class="post-actions"><button data-action="post-like" data-id="${esc(p.id)}" class="${liked?'is-liked':''}"><span>${liked?'♥':'♡'}</span>${postLikes.length}</button><button data-action="comment-focus" data-id="${esc(p.id)}"><span>▢</span>${comments.length} коментарів</button><button data-action="share" data-id="${esc(p.id)}"><span>↗</span>Поділитись</button>${p.user_id===me()?`<button class="post-delete" title="Видалити допис" data-action="post-delete" data-id="${esc(p.id)}">✕</button>`:''}</div>
- <div class="comment-area">${roots.length>3?`<button type="button" class="comment-more" data-action="comment-expand" data-id="${esc(p.id)}">${expanded?'Згорнути коментарі':`Показати всі коментарі (${comments.length})`}</button>`:''}
- ${commentsHtml}<form class="comment-form" data-post-id="${esc(p.id)}"><div class="reply-banner" hidden><span class="reply-caption"></span><button type="button" data-action="comment-reply-cancel" data-id="${esc(p.id)}" aria-label="Скасувати відповідь">×</button></div><div class="comment-form-row">${avatar(state.profile,'sm')}<input name="comment" maxlength="500" required placeholder="Написати коментар..." autocomplete="off"><button type="submit">Надіслати</button></div></form></div></article>`;
+ <div class="post-actions"><button data-action="post-like" data-id="${esc(p.id)}" class="${liked?'is-liked':''}"><span>${liked?'♥':'♡'}</span>${postLikes.length}</button>${postLikes.length?`<button type="button" data-action="post-likers" data-id="${esc(p.id)}" aria-label="Переглянути, кому сподобався допис">Хто вподобав</button>`:''}<button data-action="comment-focus" data-id="${esc(p.id)}"><span>▢</span>${comments.length} коментарів</button><button data-action="share" data-id="${esc(p.id)}"><span>↗</span>Поділитись</button>${p.user_id===me()?`<button class="post-delete" title="Видалити допис" data-action="post-delete" data-id="${esc(p.id)}">✕</button>`:''}</div>
+ <div class="comment-area" ${expanded?'':'hidden'}>${roots.length>3?`<button type="button" class="comment-more" data-action="comment-expand" data-id="${esc(p.id)}">${expanded?'Згорнути коментарі':`Показати всі коментарі (${comments.length})`}</button>`:''}
+ ${commentsHtml}<form class="comment-form" data-post-id="${esc(p.id)}"><div class="reply-banner" hidden><span class="reply-caption"></span><button type="button" data-action="comment-reply-cancel" data-id="${esc(p.id)}" aria-label="Скасувати відповідь">×</button></div><div class="comment-form-row">${avatar(state.profile,'sm')}<input name="comment" maxlength="500" required placeholder="Написати коментар..." autocomplete="off"><button type="button" data-action="emoji-comment" data-id="${esc(p.id)}" aria-label="Додати емодзі">😊</button><button type="submit">Надіслати</button></div></form></div></article>`;
 }
 function empty(title,detail,emoji='♡'){return `<div class="panel"><div class="empty"><span class="empty-emoji">${emoji}</span><strong>${esc(title)}</strong>${esc(detail)}</div></div>`}
 function viewFeed(){
@@ -536,8 +536,8 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'group-create':$('#groupName').value='';$('#groupDescription').value='';feedback('#groupFeedback','');$('#groupDialog').showModal();break;
  case 'feed-tab':state.feedFilter=id;render();break;
  case 'friends-tab':state.friendsTab=id;render();if(id==='people'&&state.friendSearch)schedulePeopleSearch(state.friendSearch);break;
- case 'comment-focus':$('#post-'+id+' .comment-form input')?.focus();break;
- case 'comment-expand':{if(expandedComments.has(id))expandedComments.delete(id);else expandedComments.add(id);paintPostComments(id);break}
+ case 'comment-focus':{expandedComments.add(id);paintPostComments(id);const area=$('#post-'+id+' .comment-area');if(area)area.hidden=false;area?.querySelector('.comment-form input')?.focus();break}
+ case 'comment-expand':{if(expandedComments.has(id))expandedComments.delete(id);else expandedComments.add(id);paintPostComments(id);const area=$('#post-'+id+' .comment-area');if(area)area.hidden=!expandedComments.has(id);break}
  case 'comment-reply':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;expandedComments.add(comment.post_id);paintPostComments(comment.post_id);const form=$(`#post-${comment.post_id} .comment-form`);if(!form)break;form.dataset.parentId=id;$('.reply-banner',form).hidden=false;$('.reply-caption',form).textContent=`Відповідь для ${byId(comment.user_id)?.display_name||'користувача'}`;const input=$('[name="comment"]',form);input.placeholder='Напишіть відповідь...';input.focus();break}
  case 'comment-reply-cancel':{const form=$(`#post-${id} .comment-form`);if(!form)break;delete form.dataset.parentId;$('.reply-banner',form).hidden=true;const input=$('[name="comment"]',form);input.placeholder='Написати коментар...';input.focus();break}
  case 'comment-edit-open':openCommentEditor(id);break;
@@ -558,7 +558,7 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
   if(navigator.share){try{await navigator.share({title:'KONTA',text:p.body?.slice(0,130)||'Допис у KONTA',url})}catch(_){}}else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Посилання на допис скопійовано')}else toast('Копіювання недоступне');
   break;
  }
- case 'post-like':await togglePostLike(id);break;
+ case 'post-likers':{const people=state.likes.filter(l=>l.post_id===id).map(l=>byId(l.user_id)?.display_name||'Користувач KONTA');alert(people.length?'Вподобали допис:\n'+people.join('\n'):'Поки немає вподобань');break}\n case 'emoji-comment':{const input=$(`#post-${id} .comment-form input`);if(!input)break;const emoji=prompt('Вибери емодзі та скопіюй у поле:', '😀 😃 😄 😁 😂 🥰 😍 😎 😢 😭 😡 👍 ❤️ 🔥 🎉 🙌 💙');if(emoji){input.value=(input.value+' '+emoji.trim()).slice(0,500);input.focus()}break}\n case 'post-like':await togglePostLike(id);break;
  case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;state.posts=state.posts.filter(x=>x.id!==id);document.getElementById('post-'+id)?.remove();toast('Допис видалено');break}
  case 'comment-delete':{
   const c=state.comments.find(item=>item.id===id),post=c?state.posts.find(p=>p.id===c.post_id):null;
