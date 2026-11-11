@@ -28,7 +28,7 @@ jobs:
           search=Path("search-actions.css").read_text(encoding="utf-8")
           enhancements=Path("konta-enhancements.css").read_text(encoding="utf-8")
           cfg=Path("config.js").read_text(encoding="utf-8")
-          for filename in ["app.js?v=12","konta-enhancements.css?v=2","media.js?v=9","styles.css?v=9","classic.js?v=9","classic.css?v=9","modern.css?v=9","search-actions.css?v=10"]:
+          for filename in ["app.js?v=13","konta-enhancements.css?v=2","media.js?v=9","styles.css?v=9","classic.js?v=9","classic.css?v=9","modern.css?v=9","search-actions.css?v=10"]:
               assert filename in html, f"Missing asset {filename}"
           for item in ["mediaUploadDialog","mediaAlbumDialog","mediaUploadForm","mediaAlbumForm"]:
               assert f'id="{item}"' in html, f"Missing element {item}"
