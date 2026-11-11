@@ -24,8 +24,9 @@ jobs:
           app=Path("app.js").read_text(encoding="utf-8")
           media=Path("media.js").read_text(encoding="utf-8")
           css=Path("styles.css").read_text(encoding="utf-8")
+          modern=Path("modern.css").read_text(encoding="utf-8")
           cfg=Path("config.js").read_text(encoding="utf-8")
-          for filename in ["app.js?v=7","media.js?v=7","styles.css?v=7","classic.js?v=7","classic.css?v=7"]:
+          for filename in ["app.js?v=8","media.js?v=8","styles.css?v=8","classic.js?v=8","classic.css?v=8","modern.css?v=8"]:
               assert filename in html, f"Missing asset {filename}"
           for item in ["mediaUploadDialog","mediaAlbumDialog","mediaUploadForm","mediaAlbumForm"]:
               assert f'id="{item}"' in html, f"Missing element {item}"
@@ -34,5 +35,7 @@ jobs:
           assert "sb_secret_" not in cfg, "Secret key found in public config"
           assert "service_role" not in cfg.lower().replace("service_role key here", ""), "Service role in config"
           assert css.count("{")==css.count("}"), "Unbalanced CSS rules"
-          print("KONTA 7 entry points and static files verified")
+          assert modern.count("{")==modern.count("}"), "Unbalanced modern CSS rules"
+          assert "html[data-theme=\"dark\"]" in modern, "Dark theme CSS missing"
+          print("KONTA 8 entry points and modern CSS verified")
           PY

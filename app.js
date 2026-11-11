@@ -99,7 +99,7 @@ function viewFeed(){
  else if(state.feedFilter==='mine')posts=posts.filter(p=>p.user_id===me());
  else if(state.feedFilter==='liked')posts=posts.filter(p=>state.likes.some(l=>l.user_id===me()&&l.post_id===p.id));
  const filters=[['all','Усі новини'],['friends','Друзі'],['groups','Спільноти'],['mine','Мої'],['liked','Сподобалося']];
- return `<h1 class="page-title">Мої новини</h1>${composer()}<div class="panel">${tabs(filters,state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('У цій стрічці поки порожньо','Додай друзів, підпишись на спільноти чи створи допис.','✎')}`;
+ return `<section class="feed-hero" aria-label="Вітаємо у KONTA"><div><div class="hero-eyebrow">Твій простір онлайн</div><h1 class="page-title">Привіт, ${esc(myName().split(' ')[0])}! 👋</h1><p class="hero-subtitle">Твої новини, друзі та нові знайомства — усе тут.</p></div><button class="btn primary hero-action" type="button" data-action="post-open">＋ Створити допис</button></section>${composer()}<div class="panel">${tabs(filters,state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('У цій стрічці поки порожньо','Додай друзів, підпишись на спільноти чи створи допис.','✎')}`;
 }
 function viewProfile(){
  const uid=state.profileId||me(),p=byId(uid);
