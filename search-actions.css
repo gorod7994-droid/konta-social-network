@@ -40,3 +40,31 @@ html[data-theme="dark"] .instant-person b{color:#eaf0ff}
 html[data-theme="dark"] .instant-person:hover{background:#304564}
 html[data-theme="dark"] .instant-search-more{background:#344c76;color:#c8d9ff}
 html[data-theme="dark"] .people-search-wrap .search-large{background:#283a52}
+
+
+/* Manage and edit comments without changing pages. */
+.comment-message[hidden],.comment-tools[hidden]{display:none!important}
+.comment-tools button[data-action="comment-delete"]{color:#b56575}
+.comment-tools button[data-action="comment-delete"]:hover{color:#b82749}
+.comment-tools button[data-action="comment-edit-open"]{font-weight:700}
+.comment-edited{font-size:10px;color:var(--modern-subtle,#8898a9);font-style:italic}
+.comment-edit-form{display:grid;gap:9px;width:100%;margin-top:5px}
+.comment-edit-form textarea{
+ display:block;width:100%;min-height:78px;resize:vertical;max-height:260px;
+ padding:11px 12px;border:1px solid var(--modern-stroke,#e1e8f0);
+ border-radius:12px;background:var(--modern-surface-alt,#f6f9ff);
+ color:var(--modern-ink,#243851);font:inherit;line-height:1.6;
+}
+.comment-edit-form textarea:focus{outline:2px solid #83a8f5;outline-offset:1px}
+.comment-edit-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.comment-edit-actions .btn{min-width:92px}
+.comment-edit-actions .btn:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:720px){
+ .comment-tools{gap:8px}
+ .comment-tools button[data-action="comment-edit-open"],
+ .comment-tools button[data-action="comment-delete"]{padding:6px 3px;font-size:11px}
+ .comment-edit-form textarea{min-height:90px}
+ .comment-edit-actions .btn{flex:0 0 auto;min-height:37px}
+}
+html[data-theme="dark"] .comment-edit-form textarea{background:#2a3b52;border-color:#4a5c77;color:#e8f0ff}
+html[data-theme="dark"] .comment-tools button[data-action="comment-delete"]{color:#ff91a7}
