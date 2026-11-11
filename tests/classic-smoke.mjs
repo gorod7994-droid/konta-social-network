@@ -9,6 +9,19 @@ const classic=fs.readFileSync('classic.js','utf8');
 const css=fs.readFileSync('classic.css','utf8');
 const modern=fs.readFileSync('modern.css','utf8');
 const searchCSS=fs.readFileSync('search-actions.css','utf8');
+const robots=fs.readFileSync('robots.txt','utf8');
+const sitemap=fs.readFileSync('sitemap.xml','utf8');
+const about=fs.readFileSync('about.html','utf8');
+assert.ok(html.includes('<link rel="canonical" href="https://konta.pp.ua/">'),'Missing canonical homepage URL');
+assert.ok(html.includes('application/ld+json'),'Missing public structured site data');
+assert.ok(html.includes('property="og:title"'),'Missing social-preview metadata');
+assert.ok(html.includes('href="/about.html"'),'Missing internal link to public informational page');
+assert.ok(about.includes('KONTA — соціальна мережа'),'Public about page is missing descriptive content');
+assert.ok(about.includes('https://konta.pp.ua/about.html'),'About page canonical URL missing');
+assert.ok(robots.includes('Sitemap: https://konta.pp.ua/sitemap.xml'),'robots.txt sitemap pointer missing');
+assert.ok(sitemap.includes('<loc>https://konta.pp.ua/</loc>')&&sitemap.includes('<loc>https://konta.pp.ua/about.html</loc>'),'Sitemap missing public pages');
+assert.ok(!sitemap.includes('http://')&&!sitemap.includes('www.konta.pp.ua'),'Sitemap includes non-canonical URLs');
+
 
 for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','konta-enhancements.css?v=2','app.js?v=12','media.js?v=9','classic.js?v=9']){
  assert.ok(html.includes(file),'Missing asset: '+file);
