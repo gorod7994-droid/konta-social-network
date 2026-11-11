@@ -7,12 +7,6 @@
 
 /* Profile: banner, clear identity and compact side cards. */
 .kp-profile{min-width:0;align-items:start}
-.kp-profile .kp-cover{grid-column:1/-1;position:relative;min-width:0;height:162px;padding:23px 27px;border-radius:23px;overflow:hidden;isolation:isolate;background:linear-gradient(115deg,#254db5 0%,#4878ec 54%,#79bdff 100%);box-shadow:0 10px 28px #335fd02c}
-.kp-profile .kp-cover::before,.kp-profile .kp-cover::after{content:"";position:absolute;border:2px solid #ffffff24;border-radius:50%;pointer-events:none}
-.kp-profile .kp-cover::before{width:300px;height:300px;right:-56px;top:-180px}
-.kp-profile .kp-cover::after{width:230px;height:230px;right:140px;bottom:-195px}
-.kp-cover-kicker{position:relative;z-index:1;display:inline-flex;align-items:center;padding:8px 12px;border:1px solid #ffffff50;border-radius:100px;background:#ffffff21;color:white;font-size:11px;font-weight:800;letter-spacing:.09em}
-.kp-cover-art{position:absolute;right:32px;bottom:-86px;font-size:220px;line-height:1;color:#ffffff1c;pointer-events:none}
 .kp-profile .profile-photo-card{border-radius:20px;padding:13px;box-shadow:0 10px 30px #1d4e9720}
 .kp-profile .profile-photo-card .avatar{width:100%;height:auto;aspect-ratio:1/1;border-radius:16px;overflow:hidden;font-size:72px;background:linear-gradient(140deg,#96baff,#d7e6ff)}
 .kp-profile .profile-summary{border-radius:20px;padding:25px 26px;box-shadow:0 9px 27px #1d4e9710}
@@ -63,13 +57,10 @@
  .main-content{min-width:0;padding-bottom:calc(120px + env(safe-area-inset-bottom))}
  .btn{min-height:40px}
  .kp-profile{display:flex;flex-direction:column;gap:12px}
- .kp-profile .kp-cover{order:0;width:100%;height:128px;border-radius:19px;padding:16px}
- .kp-cover-kicker{font-size:10px}
- .kp-cover-art{font-size:170px;right:13px;bottom:-70px}
  .kp-profile .classic-profile-main{order:1;width:100%;min-width:0;position:relative}
  .kp-profile .profile-classic-rail{order:2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%}
  .kp-profile .profile-photo-card{display:none}
- .kp-profile .profile-summary{padding:16px;margin-top:-33px;position:relative;z-index:1}
+ .kp-profile .profile-summary{padding:16px;margin-top:0;position:relative;z-index:1}
  .kp-mobile-identity{display:flex;align-items:center;gap:12px;margin-bottom:14px;min-width:0}
  .kp-mobile-identity .avatar{flex:0 0 78px;width:78px;height:78px;border:4px solid white;border-radius:25px;box-shadow:0 6px 19px #264ba02c;font-size:28px}
  .kp-mobile-identity-name{display:flex;flex-direction:column;min-width:0}
