@@ -23,7 +23,7 @@ assert.ok(sitemap.includes('<loc>https://konta.pp.ua/</loc>')&&sitemap.includes(
 assert.ok(!/<loc>http:\/\//.test(sitemap)&&!/<loc>https:\/\/www\.konta\.pp\.ua/.test(sitemap),'Sitemap includes non-canonical URLs');
 
 
-for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','konta-enhancements.css?v=2','app.js?v=12','media.js?v=9','classic.js?v=9']){
+for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','konta-enhancements.css?v=2','app.js?v=13','media.js?v=9','classic.js?v=9']){
  assert.ok(html.includes(file),'Missing asset: '+file);
 }
 for(const section of ['photos','videos','music','bookmarks','settings']){
@@ -144,3 +144,7 @@ assert.ok(!onOtherPost.includes('<script>'),'Unescaped HTML in comment');
 assert.ok(onOtherPost.includes('&lt;script&gt;'),'Comment escaping missing');
 
 console.log('KONTA comment editing and moderation smoke tests passed');
+
+assert.ok(html.includes('id="authSurname"')&&html.includes('id="profileSurname"'),'Required surname fields missing');
+assert.ok(js.includes("$('#authSurname').required=mode==='signup'"),'Surname must be required during signup');
+assert.ok(js.includes("first+' '+last"),'Full name must be saved');
