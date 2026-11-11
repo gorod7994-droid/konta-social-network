@@ -138,3 +138,12 @@ html[data-theme="dark"] .konta-share-status{color:#a9b8ca}
 html[data-theme="dark"] .konta-share-send{color:#9bc4ff}
 html[data-theme="dark"] .konta-share-copy{background:#2b405a;color:#e8effb;border-color:#526987}
 html[data-theme="dark"] .konta-share-copy:hover{background:#365171}
+
+/* Stories must follow KONTA dark mode, not fallback to a white card. */
+html[data-theme="dark"] .konta-stories{background:var(--surface,#202b3c)!important;border:1px solid var(--line,#36475d)!important;color:var(--text,#e9f0fb)!important;box-shadow:none!important}
+html[data-theme="dark"] .konta-story{background:transparent!important;color:var(--text,#e9f0fb)!important}
+html[data-theme="dark"] .story-ring{background:#26364d!important;border-color:#6688b8!important;color:#d7e8ff!important}
+html[data-theme="dark"] .konta-story.add .story-ring{border-color:#6c8fbd!important;color:#d7e8ff!important}
+html[data-theme="dark"] .story-empty,html[data-theme="dark"] .konta-story small{color:#b5c5d9!important}
+.konta-verified{display:inline-grid;place-items:center;width:17px;height:17px;margin-left:5px;vertical-align:middle;border-radius:50%;background:#2587ef;color:#fff;font-size:12px;font-weight:900;line-height:1;box-shadow:0 0 0 1px rgba(255,255,255,.14)}
+html[data-theme="dark"] .konta-verified{background:#3c96ff;color:#fff}
