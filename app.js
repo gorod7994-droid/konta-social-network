@@ -227,7 +227,7 @@ function openEmojiGrid(input,chat=false){
  for(const emoji of KONTA_EMOJIS){const btn=document.createElement('button');btn.type='button';btn.textContent=emoji;btn.setAttribute('aria-label','Вставити '+emoji);
  btn.onclick=()=>{const start=input.selectionStart??input.value.length,end=input.selectionEnd??start;const limit=input.maxLength>0?input.maxLength:2000;
  const value=input.value.slice(0,start)+emoji+input.value.slice(end);if(value.length>limit)return;
- input.value=value;input.selectionStart=input.selectionEnd=start+emoji.length;input.dispatchEvent(new Event('input',{bubbles:true}));if(chat)messageDrafts.set(state.chatId,input.value);
+ input.value=value;input.selectionStart=input.selectionEnd=start+emoji.length;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));if(chat){messageDrafts.set(state.chatId,input.value);const send=input.closest('form')?.querySelector('button[type="submit"]');if(send)send.disabled=!input.value.trim();}
  backdrop.remove();input.focus()};grid.append(btn)}
  dialog.append(grid);
 }
@@ -753,7 +753,7 @@ async function sendMessage(form){
   if(error)throw error;
   messageDrafts.delete(currentChat);state.chatReplyId=null;state.chatEditId=null;input.value='';
   await afterChange(editing?'Повідомлення змінено':null);
- }catch(error){toast(errText(error));btn.disabled=false}
+ }catch(error){toast(errText(error))}finally{if(document.contains(btn))btn.disabled=!input.value.trim()}
 }
 function wireEvents(){
  $$('[data-mode]').forEach(button=>button.addEventListener('click',()=>changeAuthMode(button.dataset.mode)));
@@ -776,7 +776,7 @@ function wireEvents(){
  });
  $('#topSearch').addEventListener('input',e=>schedulePeopleSearch(e.target.value));
  $('#topSearch').addEventListener('focus',()=>repaintPeopleResults());
- document.addEventListener('input',event=>{if(event.target.id==='exploreInput'){state.search=event.target.value;schedulePeopleSearch(state.search)}if(event.target.matches('#messageForm textarea[name="body"]')&&state.chatId)messageDrafts.set(state.chatId,event.target.value);if(event.target.id==='chatSearch'){const q=event.target.value.trim().toLocaleLowerCase('uk-UA');$('.chat-list-item').forEach(n=>n.hidden=!n.dataset.chatName?.includes(q))}if(event.target.id==='friendsSearchInput'){state.friendSearch=event.target.value;schedulePeopleSearch(state.friendSearch)}});
+ document.addEventListener('input',event=>{if(event.target.id==='exploreInput'){state.search=event.target.value;schedulePeopleSearch(state.search)}if(event.target.matches('#messageForm textarea[name="body"]')&&state.chatId){messageDrafts.set(state.chatId,event.target.value);const send=event.target.closest('form')?.querySelector('button[type="submit"]');if(send)send.disabled=!event.target.value.trim()}if(event.target.id==='chatSearch'){const q=event.target.value.trim().toLocaleLowerCase('uk-UA');$('.chat-list-item').forEach(n=>n.hidden=!n.dataset.chatName?.includes(q))}if(event.target.id==='friendsSearchInput'){state.friendSearch=event.target.value;schedulePeopleSearch(state.friendSearch)}});
  document.addEventListener('submit',e=>{if(e.target.matches('.comment-form')){e.preventDefault();submitComment(e.target)}else if(e.target.matches('.comment-edit-form')){e.preventDefault();submitCommentEdit(e.target)}else if(e.target.id==='messageForm'){e.preventDefault();sendMessage(e.target)}});
  document.addEventListener('keydown',e=>{if(e.target.matches('#messageForm textarea[name="body"]')&&e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&(state.preferences?.enter_to_send!==false||e.ctrlKey||e.metaKey)){e.preventDefault();e.target.closest('form')?.requestSubmit()}});
  document.addEventListener('click',e=>{
