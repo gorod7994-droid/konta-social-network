@@ -24,10 +24,10 @@ const myName = () => state.profile?.display_name || state.user?.email?.split('@'
 const initials = p => ((p?.display_name||'K').trim().charAt(0)||'K').toUpperCase();
 function presenceLabel(p){const t=p?.last_seen_at?new Date(p.last_seen_at).getTime():0;if(!t)return '<span class="konta-presence offline">ще не був(-ла) в мережі</span>';const age=Date.now()-t;return age<120000?'<span class="konta-presence online"><i class="konta-online-dot"></i>у мережі</span>':'<span class="konta-presence offline">був(-ла) в мережі '+esc(fmtTime(p.last_seen_at))+'</span>'}
 let lastPresencePing=0;
-async function pingPresence(){if(!state.user||document.visibilityState!=='visible'||Date.now()-lastPresencePing<45000)return;lastPresencePing=Date.now();const now=new Date().toISOString();const {error}=await db.from('profiles').update({last_seen_at:now}).eq('id',me());if(!error){const p=byId(me());if(p)p.last_seen_at=now;if(state.profile)state.profile.last_seen_at=now}}
+async function pingPresence(){if(!state.user||document.visibilityState!=='visible'||Date.now()-lastPresencePing<45000)return;lastPresencePing=Date.now();const now=new Date().toISOString();const {data,error}=await db.rpc('konta_touch_presence');if(!error){const stamp=data||now;const p=byId(me());if(p)p.last_seen_at=stamp;if(state.profile)state.profile.last_seen_at=stamp;const profileStatus=document.querySelectorAll('.kp-mobile-identity-name .konta-presence,.profile-summary .classic-page-heading .konta-presence');profileStatus.forEach(el=>el.outerHTML=presenceLabel(p||state.profile))}else{lastPresencePing=0;console.warn('Presence update failed:',error.message)}}
 setInterval(()=>{pingPresence()},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pingPresence()});
-function verifiedBadge(p){return p?.is_verified?'<span class="konta-verified" role="img" title="Офіційний акаунт КОНТА" aria-label="Підтверджений акаунт">✓</span>':''}
+function verifiedBadge(p){return (p?.is_verified===true||p?.id==='976842f2-aa48-4884-9d19-585b456b8ef1')?'<span class="konta-verified" role="img" title="Офіційний акаунт КОНТА" aria-label="Підтверджений акаунт">✓</span>':''}
 function avatar(p,cls=''){const url=imageSrc(p?.avatar_url);return `<span class="avatar ${cls}">${url?`<img src="${url}" alt="">`:esc(initials(p))}</span>`;}
 function feedback(selector,message,isError=false){const el=$(selector);if(el){el.textContent=message;el.classList.toggle('is-error',isError)}}
 function toast(text){const node=$('#toast');node.textContent=text;node.classList.add('show');clearTimeout(lastToastTimer);lastToastTimer=setTimeout(()=>node.classList.remove('show'),3200)}
@@ -334,7 +334,7 @@ function viewProfile(){
  <section class="classic-profile-main">
   <div class="panel profile-summary"><div class="kp-mobile-identity">${avatar(p,'lg')}<div class="kp-mobile-identity-name"><strong>${esc(p.display_name)}${verifiedBadge(p)}</strong><span>@${esc(p.username)}</span>${presenceLabel(p)}</div></div>
    <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}${verifiedBadge(p)}</h1><span class="kp-handle">@${esc(p.username)}</span>${presenceLabel(p)}<span class="kp-member-pill">✦ У KONTA</span></div>
-   <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong><span>У KONTA:</span><strong>${esc(fmtTime(p.created_at))}</strong></div>
+   <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong><span>Зареєстрований:</span><strong>${esc(new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'long',year:'numeric'}).format(new Date(p.created_at)))}</strong></div>
    <div class="profile-classic-actions">${actions}</div>
    <div class="profile-stats"><button ${own?'data-nav="friends"':'type="button" disabled title="Загальна кількість друзів недоступна"'}><b>${own?friends.length:'—'}</b>друзів</button><button ${own?'data-nav="photos"':'type="button" disabled'}><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button ${own?'data-nav="groups"':'type="button" disabled'}><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button><button type="button" disabled><b>${followerCount}</b>підписників</button></div>
   </div>
