@@ -146,5 +146,5 @@ assert.ok(onOtherPost.includes('&lt;script&gt;'),'Comment escaping missing');
 console.log('KONTA comment editing and moderation smoke tests passed');
 
 assert.ok(html.includes('id="authSurname"')&&html.includes('id="profileSurname"'),'Required surname fields missing');
-assert.ok(js.includes("$('#authSurname').required=mode==='signup'"),'Surname must be required during signup');
-assert.ok(js.includes("first+' '+last"),'Full name must be saved');
+assert.ok(app.includes("$('#authSurname').required=mode==='signup'"),'Surname must be required during signup');
+assert.ok(app.includes("first+' '+last"),'Full name must be saved');
