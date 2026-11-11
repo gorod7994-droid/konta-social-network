@@ -620,7 +620,9 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
   }else toast('Вибери номер друга зі списку');
   break;
  }
- case 'post-likers':{const people=state.likes.filter(l=>l.post_id===id).map(l=>byId(l.user_id)?.display_name||'Користувач KONTA');alert(people.length?'Вподобали допис:\n'+people.join('\n'):'Поки немає вподобань');break}\n case 'emoji-comment':{const input=$(`#post-${id} .comment-form input`);if(!input)break;const emoji=prompt('Вибери емодзі та скопіюй у поле:', '😀 😃 😄 😁 😂 🥰 😍 😎 😢 😭 😡 👍 ❤️ 🔥 🎉 🙌 💙');if(emoji){input.value=(input.value+' '+emoji.trim()).slice(0,500);input.focus()}break}\n case 'poll-vote':{const option=state.pollOptions.find(o=>o.id===id);if(!option)break;const {error}=await db.from('poll_votes').insert({poll_id:option.poll_id,option_id:id,user_id:me()});if(error)throw error;await loadAll(true);render();toast('Голос враховано');break}
+ case 'post-likers':{const people=state.likes.filter(l=>l.post_id===id).map(l=>byId(l.user_id)?.display_name||'Користувач KONTA');alert(people.length?'Вподобали допис:\n'+people.join('\n'):'Поки немає вподобань');break}
+ case 'emoji-comment':{const input=$(`#post-${id} .comment-form input`);if(!input)break;const emoji=prompt('Вибери емодзі та скопіюй у поле:', '😀 😃 😄 😁 😂 🥰 😍 😎 😢 😭 😡 👍 ❤️ 🔥 🎉 🙌 💙');if(emoji){input.value=(input.value+' '+emoji.trim()).slice(0,500);input.focus()}break}
+ case 'poll-vote':{const option=state.pollOptions.find(o=>o.id===id);if(!option)break;const {error}=await db.from('poll_votes').insert({poll_id:option.poll_id,option_id:id,user_id:me()});if(error)throw error;await loadAll(true);render();toast('Голос враховано');break}
  case 'post-like':await togglePostLike(id);break;
  case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;state.posts=state.posts.filter(x=>x.id!==id);document.getElementById('post-'+id)?.remove();toast('Допис видалено');break}
  case 'comment-delete':{
