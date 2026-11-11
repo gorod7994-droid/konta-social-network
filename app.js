@@ -217,7 +217,7 @@ function viewProfile(){
  `<button type="button" class="btn ${following?'soft':'primary'} small" data-action="follow-toggle" data-id="${esc(uid)}" aria-pressed="${following}">${following?'✓ Підписаний(-а)':'＋ Підписатися'}</button> ${friendAction(uid)} <button class="btn secondary small" data-action="chat-open" data-id="${esc(uid)}">Повідомлення</button>`;
  const friendGrid=friends.slice(0,6).map(x=>`<button data-action="profile-open" data-id="${esc(x.id)}" title="${esc(x.display_name)}">${avatar(x,'sm')}<span>${esc(x.display_name.split(' ')[0])}</span></button>`).join('');
  const images=photoUrls.map(src=>`<img src="${imageSrc(src)}" loading="lazy" alt="Фото користувача">`).join('');
- return `<div class="profile-classic kp-profile"><div class="kp-cover"><span class="kp-cover-kicker">KONTA · ПРОФІЛЬ</span><span class="kp-cover-art" aria-hidden="true">✦</span></div>
+ return `<div class="profile-classic kp-profile">
  <aside class="profile-classic-rail">
   <div class="panel profile-photo-card">${avatar(p,'lg')}${own?'<button class="btn soft small" data-action="profile-edit">Змінити фотографію</button>':`<button class="btn primary small" data-action="chat-open" data-id="${esc(uid)}">Написати</button>`}</div>
   <div class="panel"><h3 class="classic-section-title">Друзі <span>${friends.length}</span></h3><div class="classic-peek"><div class="classic-friend-grid">${friendGrid||'<span class="subtle">Поки немає друзів</span>'}</div></div></div>
