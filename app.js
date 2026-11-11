@@ -6,7 +6,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const imageSrc = url => typeof url==='string' && /^https:\/\//i.test(url) ? esc(url) : '';
 const idOK = value => typeof value==='string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(value);
 const fmtTime = value => {const d=new Date(value); if(Number.isNaN(d.valueOf()))return '';const diff=(Date.now()-d.getTime())/60000;if(diff>=0&&diff<1)return 'щойно';if(diff>=0&&diff<60)return `${Math.floor(diff)} хв тому`;if(diff>=0&&diff<1440)return `${Math.floor(diff/60)} год тому`;return new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(d)};
-const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],follows:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
+const state = {user:null,profile:null,profiles:[],posts:[],stories:[],polls:[],pollOptions:[],pollVotes:[],likes:[],comments:[],commentLikes:[],friends:[],follows:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
 const expandedComments = new Set();
 const messageDrafts = new Map();
 const pendingReactions = new Set();
@@ -59,6 +59,10 @@ async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refre
   const queries = [
     ['profiles', db.from('profiles').select('*').limit(500)],
     ['posts',db.from('posts').select('*').order('created_at',{ascending:false}).limit(200)],
+    ['stories',db.from('stories').select('*').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(150)],
+    ['polls',db.from('polls').select('*').limit(300)],
+    ['pollOptions',db.from('poll_options').select('*').limit(1000)],
+    ['pollVotes',db.from('poll_votes').select('*').limit(3000)],
     ['likes',db.from('likes').select('*').limit(3000)],
     ['comments',db.from('comments').select('*').order('created_at',{ascending:true}).limit(3000)],
     ['commentLikes',db.from('comment_likes').select('*').limit(4000)],
@@ -191,6 +195,42 @@ function postCard(p){
  ${commentsHtml}<form class="comment-form" data-post-id="${esc(p.id)}"><div class="reply-banner" hidden><span class="reply-caption"></span><button type="button" data-action="comment-reply-cancel" data-id="${esc(p.id)}" aria-label="Скасувати відповідь">×</button></div><div class="comment-form-row">${avatar(state.profile,'sm')}<input name="comment" maxlength="500" required placeholder="Написати коментар..." autocomplete="off"><button type="button" data-action="emoji-comment" data-id="${esc(p.id)}" aria-label="Додати емодзі">😊</button><button type="submit">Надіслати</button></div></form></div></article>`;
 }
 function empty(title,detail,emoji='♡'){return `<div class="panel"><div class="empty"><span class="empty-emoji">${emoji}</span><strong>${esc(title)}</strong>${esc(detail)}</div></div>`}
+function storyStrip(){
+ const followed=new Set([...friendIds(),...state.follows.filter(f=>f.follower_id===me()).map(f=>f.followed_id),me()]);
+ const visible=state.stories.filter(st=>followed.has(st.user_id)&&new Date(st.expires_at)>new Date());
+ const seen=new Set();const unique=visible.filter(st=>{if(seen.has(st.user_id))return false;seen.add(st.user_id);return true});
+ return `<section class="konta-stories" aria-label="Історії друзів та підписок"><button type="button" class="konta-story add" data-action="story-create"><span class="story-ring">＋</span><small>Моя історія</small></button>${unique.map(st=>`<button type="button" class="konta-story" data-action="story-view" data-id="${esc(st.id)}"><span class="story-ring">${avatar(byId(st.user_id))}</span><small>${esc((byId(st.user_id)?.display_name||'Користувач').split(' ')[0])}</small></button>`).join('')}${!unique.length?'<span class="story-empty">Історії друзів та підписок з’являться тут</span>':''}</section>`;
+}
+async function createStory(){
+ const picker=document.createElement('input');picker.type='file';picker.accept='image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm';picker.onchange=async()=>{
+ const file=picker.files?.[0];if(!file)return;
+ try{
+ if(file.size>15*1024*1024)throw Error('Історія має бути до 15 МБ.');
+ if(!['image/png','image/jpeg','image/webp','image/gif','video/mp4','video/webm'].includes(file.type))throw Error('Оберіть фото або MP4/WebM.');
+ toast('Завантажуємо історію...');
+ const ext=file.name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';
+ const path=`${me()}/story-${crypto.randomUUID()}.${ext}`;
+ const {error:uploadError}=await db.storage.from('konta-media').upload(path,file,{contentType:file.type,upsert:false});
+ if(uploadError)throw uploadError;
+ const url=db.storage.from('konta-media').getPublicUrl(path).data.publicUrl;
+ const {error}=await db.from('stories').insert({user_id:me(),media_url:url,media_type:file.type.startsWith('video/')?'video':'image'});
+ if(error)throw error;
+ await loadAll(true);render();toast('Історію додано на 24 години!');
+ }catch(e){toast(errText(e))}
+ };picker.click();
+}
+function showStory(id){
+ const st=state.stories.find(x=>x.id===id);if(!st)return;
+ const overlay=document.createElement('div');overlay.className='konta-story-overlay';
+ const media=st.media_type==='video'?document.createElement('video'):document.createElement('img');
+ media.src=st.media_url;media.className='konta-story-media';
+ if(st.media_type==='video'){media.controls=true;media.autoplay=true;media.playsInline=true}
+ const close=document.createElement('button');close.textContent='✕ Закрити';close.className='konta-story-close';close.onclick=()=>overlay.remove();
+ overlay.append(close,media);
+ if(st.user_id===me()){const del=document.createElement('button');del.textContent='Видалити історію';del.className='konta-story-delete';del.onclick=async()=>{const {error}=await db.from('stories').delete().eq('id',st.id).eq('user_id',me());if(error){toast(errText(error));return}overlay.remove();await loadAll(true);render()};overlay.append(del)}
+ overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.append(overlay);
+}
+
 function viewFeed(){
  let posts=[...state.posts];
  if(state.feedFilter==='friends')posts=posts.filter(p=>friendIds().includes(p.user_id)&&!p.community_id);
@@ -198,7 +238,7 @@ function viewFeed(){
  else if(state.feedFilter==='mine')posts=posts.filter(p=>p.user_id===me());
  else if(state.feedFilter==='liked')posts=posts.filter(p=>state.likes.some(l=>l.user_id===me()&&l.post_id===p.id));
  const filters=[['all','Усі новини'],['friends','Друзі'],['groups','Спільноти'],['mine','Мої'],['liked','Сподобалося']];
- return `<section class="feed-hero" aria-label="Вітаємо у KONTA"><div><div class="hero-eyebrow">Твій простір онлайн</div><h1 class="page-title">Привіт, ${esc(myName().split(' ')[0])}! 👋</h1><p class="hero-subtitle">Твої новини, друзі та нові знайомства — усе тут.</p></div><button class="btn primary hero-action" type="button" data-action="post-open">＋ Створити допис</button></section>${composer()}<div class="panel">${tabs(filters,state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('У цій стрічці поки порожньо','Додай друзів, підпишись на спільноти чи створи допис.','✎')}`;
+ return `${storyStrip()}${composer()}<div class="panel">${tabs(filters,state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('У цій стрічці поки порожньо','Додай друзів, підпишись на спільноти чи створи допис.','✎')}`;
 }
 function viewProfile(){
  const uid=state.profileId||me(),p=byId(uid);
@@ -534,6 +574,8 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'chat-open':if(idOK(id)){state.chatReplyId=null;state.chatEditId=null;go('messages',{chatId:id});}break;
  case 'group-open':if(idOK(id))go('group',{groupId:id});break;
  case 'group-create':$('#groupName').value='';$('#groupDescription').value='';feedback('#groupFeedback','');$('#groupDialog').showModal();break;
+ case 'story-create':await createStory();break;
+ case 'story-view':showStory(id);break;
  case 'feed-tab':state.feedFilter=id;render();break;
  case 'friends-tab':state.friendsTab=id;render();if(id==='people'&&state.friendSearch)schedulePeopleSearch(state.friendSearch);break;
  case 'comment-focus':{expandedComments.add(id);paintPostComments(id);const area=$('#post-'+id+' .comment-area');if(area)area.hidden=false;area?.querySelector('.comment-form input')?.focus();break}
