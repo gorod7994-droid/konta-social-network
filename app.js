@@ -279,7 +279,21 @@ function viewMessages(){
 }
 function viewBookmarks(){const liked=state.posts.filter(p=>state.likes.some(l=>l.user_id===me()&&l.post_id===p.id));return `<h1 class="page-title">Мої закладки</h1><div class="panel">${header('Вподобані записи')}</div>${liked.length?liked.map(postCard).join(''):empty('Закладок поки немає','Постав ♥ на допис — і він з’явиться тут.','☆')}`}
 function viewSettings(){return window.KONTA_CLASSIC?.renderSettings()||empty('Налаштування','Завантаження інтерфейсу...')}
-function viewNotifications(){const notices=state.notifications;const labels={friend:'надіслав(-ла) заявку в друзі',like:'вподобав(-ла) твій допис',comment:'прокоментував(-ла) твій допис',message:'написав(-ла) тобі повідомлення'};return `<h1 class="page-title">Сповіщення</h1><div class="panel">${header('Нові події','<button class="btn soft small" data-action="notice-read">Позначити прочитаними</button>')} ${notices.length?notices.map(n=>`<div class="notice ${n.is_read?'':'is-unread'}">${avatar(byId(n.actor_id),'sm')}<div class="notice-body"><a href="#" data-action="profile-open" data-id="${esc(n.actor_id)}">${esc(byId(n.actor_id)?.display_name||'Користувач')}</a> ${esc(labels[n.kind]||'є новина для тебе')}<small>${esc(fmtTime(n.created_at))}</small></div></div>`).join(''):'<div class="empty">Сповіщень поки немає</div>'}</div>`}
+function viewNotifications(){
+ const notices=state.notifications,unread=notices.filter(n=>!n.is_read).length;
+ const labels={friend:'надіслав(-ла) тобі заявку в друзі',like:'вподобав(-ла) твій допис',comment:'прокоментував(-ла) твій допис',message:'написав(-ла) тобі повідомлення'};
+ const icons={friend:'👥',like:'♥',comment:'💬',message:'✉'};
+ const title='<div class="kp-notice-header"><div><h1 class="page-title">🔔 Сповіщення</h1><p>'+(unread?unread+' непрочитаних':'Усі сповіщення прочитані')+'</p></div>'+(unread?'<button class="btn soft small" data-action="notice-read">Прочитати всі</button>':'')+'</div>';
+ const rows=notices.length?notices.map(n=>{
+   const author=byId(n.actor_id);
+   return '<button type="button" class="kp-notice-item '+(n.is_read?'':'is-unread')+'" data-action="notice-open" data-id="'+esc(n.id)+'" aria-label="Відкрити сповіщення">'+
+     '<span class="kp-notice-avatar">'+avatar(author,'sm')+'<span class="kp-notice-kind">'+(icons[n.kind]||'•')+'</span></span>'+
+     '<span class="kp-notice-text"><strong>'+esc(author?.display_name||'Користувач')+'</strong> '+esc(labels[n.kind]||'є новина для тебе')+
+     '<small>'+esc(fmtTime(n.created_at))+'</small></span>'+
+     (!n.is_read?'<span class="kp-unread-marker" aria-label="Непрочитане"></span>':'')+'<span class="kp-notice-arrow" aria-hidden="true">›</span></button>';
+ }).join(''):'<div class="empty">Тут з’являться вподобання, коментарі, повідомлення та заявки в друзі.</div>';
+ return title+'<div class="panel kp-notice-list">'+rows+'</div>';
+}
 function render(){if(!state.user)return;$$('[data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));renderSuggestions();const views={feed:viewFeed,profile:viewProfile,friends:viewFriends,explore:viewExplore,photos:viewPhotos,videos:viewVideos,music:viewMusic,settings:viewSettings,bookmarks:viewBookmarks,groups:viewGroups,group:viewGroup,messages:viewMessages,notifications:viewNotifications};$('#main').innerHTML=initialLoadError?setupError():(views[state.view]||viewFeed)();$('#main').dataset.renderedView=state.view;if(state.view==='messages'){$('#messageScroll')?.scrollTo(0,999999)} }
 function go(view,opts={}){state.view=view;if('userId'in opts)state.profileId=opts.userId;if('chatId'in opts)state.chatId=opts.chatId;if('groupId'in opts)state.groupId=opts.groupId;if('search'in opts){state.search=opts.search;if(view==='explore')schedulePeopleSearch(state.search)}render();if(window.innerWidth<720)window.scrollTo({top:0,behavior:'smooth'})}
 function openPost(groupId=null){state.postGroupId=groupId;$('#postText').value='';$('#postFile').value='';$('#postFileLabel').textContent='До 8 МБ';$('#postPreview').hidden=true;feedback('#postFeedback','');$('#postDialog').showModal()}
@@ -559,7 +573,37 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'friend-remove':{const rec=friendRecord(id);if(!rec)break;const {error}=await db.from('friendships').delete().eq('id',rec.id);if(error)throw error;await refreshFriendshipUI();toast(rec.status==='accepted'?'Видалено з друзів':'Заявку скасовано');break}
  case 'group-join':{if(!idOK(id))break;const {error}=await db.from('community_members').insert({community_id:id,user_id:me()});if(error)throw error;await refreshMembershipUI();toast('Ти вступив(-ла) у спільноту!');break}
  case 'group-leave':{if(!idOK(id))break;const {error}=await db.from('community_members').delete().eq('community_id',id).eq('user_id',me());if(error)throw error;await refreshMembershipUI();toast('Ти вийшов(-ла) зі спільноти');break}
- case 'notice-read':{const {error}=await db.from('notifications').update({is_read:true}).eq('target_id',me()).eq('is_read',false);if(error)throw error;state.notifications=state.notifications.map(n=>({...n,is_read:true}));document.querySelectorAll('.notice.is-unread').forEach(n=>n.classList.remove('is-unread'));const dot=$('#noticeDot');if(dot)dot.hidden=true;toast('Сповіщення прочитано');break}
+ case 'notice-open':{
+   const n=state.notifications.find(item=>item.id===id);
+   if(!n)break;
+   if(!n.is_read){
+     const {error}=await db.from('notifications').update({is_read:true}).eq('id',id).eq('target_id',me());
+     if(error)throw error;
+     state.notifications=state.notifications.map(item=>item.id===id?{...item,is_read:true}:item);
+     renderSuggestions();
+   }
+   if(n.kind==='message'&&idOK(n.actor_id)){go('messages',{chatId:n.actor_id});break}
+   if(n.kind==='friend'){state.friendsTab='requests';go('friends');break}
+   if(n.post_id&&idOK(n.post_id)){
+     const post=state.posts.find(item=>item.id===n.post_id);
+     if(post){
+       if(post.community_id)go('group',{groupId:post.community_id});
+       else{state.feedFilter='all';go('feed')}
+       requestAnimationFrame(()=>document.getElementById('post-'+post.id)?.scrollIntoView({behavior:'smooth',block:'center'}));
+     }else{go('notifications');toast('Цей допис уже недоступний')}
+     break;
+   }
+   if(idOK(n.actor_id))go('profile',{userId:n.actor_id});
+   else go('notifications');
+   break;
+  }
+  case 'notice-read':{
+   if(!state.notifications.some(n=>!n.is_read))break;
+   const {error}=await db.from('notifications').update({is_read:true}).eq('target_id',me()).eq('is_read',false);
+   if(error)throw error;
+   state.notifications=state.notifications.map(n=>({...n,is_read:true}));
+   renderSuggestions();render();toast('Сповіщення прочитано');break;
+  }
  default:if(action.startsWith('media-')&&window.KONTA_MEDIA)await window.KONTA_MEDIA.action(action,id);else if(action.startsWith('classic-')&&window.KONTA_CLASSIC)await window.KONTA_CLASSIC.action(action,id,node);break;
  }}catch(error){toast(errText(error))}}
 async function submitComment(form){
