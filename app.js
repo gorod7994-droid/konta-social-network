@@ -6,7 +6,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const imageSrc = url => typeof url==='string' && /^https:\/\//i.test(url) ? esc(url) : '';
 const idOK = value => typeof value==='string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(value);
 const fmtTime = value => {const d=new Date(value); if(Number.isNaN(d.valueOf()))return '';const diff=(Date.now()-d.getTime())/60000;if(diff>=0&&diff<1)return 'щойно';if(diff>=0&&diff<60)return `${Math.floor(diff)} хв тому`;if(diff>=0&&diff<1440)return `${Math.floor(diff/60)} год тому`;return new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(d)};
-const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
+const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],follows:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
 const expandedComments = new Set();
 const messageDrafts = new Map();
 const pendingReactions = new Set();
@@ -63,6 +63,7 @@ async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refre
     ['comments',db.from('comments').select('*').order('created_at',{ascending:true}).limit(3000)],
     ['commentLikes',db.from('comment_likes').select('*').limit(4000)],
     ['friends',db.from('friendships').select('*').or(`requester_id.eq.${id},addressee_id.eq.${id}`).limit(1000)],
+    ['follows',db.from('follows').select('*').limit(3000)],
     ['groups',db.from('communities').select('*').order('created_at',{ascending:false}).limit(200)],
     ['members',db.from('community_members').select('*').limit(3000)],
     ['albums',db.from('media_albums').select('*').order('created_at',{ascending:false}).limit(500)],
@@ -210,8 +211,10 @@ function viewProfile(){
  const libraryPhotos=state.library.filter(x=>x.kind==='photo'&&x.owner_id===uid);
  const postPhotos=state.posts.filter(x=>x.user_id===uid&&imageSrc(x.media_url)).map(x=>x.media_url);
  const photoUrls=[...libraryPhotos.map(x=>db.storage.from('konta-library').getPublicUrl(x.storage_path).data.publicUrl),...postPhotos].slice(0,6);
+ const following=!own&&state.follows.some(f=>f.follower_id===me()&&f.followed_id===uid);
+ const followerCount=state.follows.filter(f=>f.followed_id===uid).length;
  const actions=own?`<button class="btn primary small" data-action="profile-edit">Редагувати сторінку</button>`:
- `${friendAction(uid)} <button class="btn primary small" data-action="chat-open" data-id="${esc(uid)}">Написати повідомлення</button>`;
+ `<button type="button" class="btn ${following?'soft':'primary'} small" data-action="follow-toggle" data-id="${esc(uid)}" aria-pressed="${following}">${following?'✓ Підписаний(-а)':'＋ Підписатися'}</button> ${friendAction(uid)} <button class="btn secondary small" data-action="chat-open" data-id="${esc(uid)}">Повідомлення</button>`;
  const friendGrid=friends.slice(0,6).map(x=>`<button data-action="profile-open" data-id="${esc(x.id)}" title="${esc(x.display_name)}">${avatar(x,'sm')}<span>${esc(x.display_name.split(' ')[0])}</span></button>`).join('');
  const images=photoUrls.map(src=>`<img src="${imageSrc(src)}" loading="lazy" alt="Фото користувача">`).join('');
  return `<div class="profile-classic kp-profile"><div class="kp-cover"><span class="kp-cover-kicker">KONTA · ПРОФІЛЬ</span><span class="kp-cover-art" aria-hidden="true">✦</span></div>
@@ -225,7 +228,7 @@ function viewProfile(){
    <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}</h1><span class="kp-handle">@${esc(p.username)}</span><span class="kp-member-pill">✦ У KONTA</span></div>
    <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong><span>У KONTA:</span><strong>${esc(fmtTime(p.created_at))}</strong></div>
    <div class="profile-classic-actions">${actions}</div>
-   <div class="profile-stats"><button ${own?'data-nav="friends"':'type="button" disabled title="Загальна кількість друзів недоступна"'}><b>${own?friends.length:'—'}</b>друзів</button><button ${own?'data-nav="photos"':'type="button" disabled'}><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button ${own?'data-nav="groups"':'type="button" disabled'}><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button></div>
+   <div class="profile-stats"><button ${own?'data-nav="friends"':'type="button" disabled title="Загальна кількість друзів недоступна"'}><b>${own?friends.length:'—'}</b>друзів</button><button ${own?'data-nav="photos"':'type="button" disabled'}><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button ${own?'data-nav="groups"':'type="button" disabled'}><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button><button type="button" disabled><b>${followerCount}</b>підписників</button></div>
   </div>
   ${own?composer():''}
   <h3 class="section-heading">Стіна · ${posts.length} записів</h3>
@@ -281,8 +284,8 @@ function viewBookmarks(){const liked=state.posts.filter(p=>state.likes.some(l=>l
 function viewSettings(){return window.KONTA_CLASSIC?.renderSettings()||empty('Налаштування','Завантаження інтерфейсу...')}
 function viewNotifications(){
  const notices=state.notifications,unread=notices.filter(n=>!n.is_read).length;
- const labels={friend:'надіслав(-ла) тобі заявку в друзі',like:'вподобав(-ла) твій допис',comment:'прокоментував(-ла) твій допис',message:'написав(-ла) тобі повідомлення'};
- const icons={friend:'👥',like:'♥',comment:'💬',message:'✉'};
+ const labels={follow:'підписався(-лася) на твою сторінку',friend:'надіслав(-ла) тобі заявку в друзі',like:'вподобав(-ла) твій допис',comment:'прокоментував(-ла) твій допис',message:'написав(-ла) тобі повідомлення'};
+ const icons={follow:'✦',friend:'👥',like:'♥',comment:'💬',message:'✉'};
  const title='<div class="kp-notice-header"><div><h1 class="page-title">🔔 Сповіщення</h1><p>'+(unread?unread+' непрочитаних':'Усі сповіщення прочитані')+'</p></div>'+(unread?'<button class="btn soft small" data-action="notice-read">Прочитати всі</button>':'')+'</div>';
  const rows=notices.length?notices.map(n=>{
    const author=byId(n.actor_id);
@@ -566,6 +569,16 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
   if(!data)throw Error('Не вдалося видалити коментар. Перевір права доступу.');
   await reloadCommentsForPost(c.post_id,true);
   toast('Коментар видалено');
+  break;
+ }
+ case 'follow-toggle':{
+  if(!idOK(id)||id===me())break;
+  const following=state.follows.some(f=>f.follower_id===me()&&f.followed_id===id);
+  const req=following?db.from('follows').delete().eq('follower_id',me()).eq('followed_id',id):db.from('follows').insert({follower_id:me(),followed_id:id});
+  const {error}=await req;
+  if(error)throw error;
+  await loadAll(true);
+  toast(following?'Ти відписався(-лася)':'Тепер ти підписаний(-а)!');
   break;
  }
  case 'friend-add':{if(id===me()||!idOK(id))break;const {error}=await db.from('friendships').insert({requester_id:me(),addressee_id:id,status:'pending'});if(error)throw error;await refreshFriendshipUI();toast('Запит у друзі надіслано!');break}
