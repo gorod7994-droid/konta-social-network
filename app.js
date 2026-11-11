@@ -555,7 +555,19 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'share':{
   const p=state.posts.find(p=>p.id===id);if(!p)break;
   const url=location.origin+location.pathname+'#post='+encodeURIComponent(p.id);
-  if(navigator.share){try{await navigator.share({title:'KONTA',text:p.body?.slice(0,130)||'Допис у KONTA',url})}catch(_){}}else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Посилання на допис скопійовано')}else toast('Копіювання недоступне');
+  const friends=friendIds().map(uid=>({id:uid,name:byId(uid)?.display_name||'Користувач'}));
+  const options=friends.map((f,i)=>`${i+1}. ${f.name}`).join('\n');
+  const choice=prompt('Поділитися дописом у КОНТА:\n'+(options||'Поки немає друзів')+'\n\nВведи номер друга або 0, щоб скопіювати посилання:','0');
+  if(choice===null)break;
+  const selected=Number(choice);
+  if(Number.isInteger(selected)&&selected>=1&&selected<=friends.length){
+   const friend=friends[selected-1];
+   const {error}=await db.from('private_messages').insert({sender_id:me(),recipient_id:friend.id,body:'Поділився(-лася) дописом у КОНТА: '+url});
+   if(error)throw error;
+   toast('Допис надіслано: '+friend.name);
+  }else if(choice.trim()==='0'){
+   if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Посилання скопійовано')}else toast(url);
+  }else toast('Вибери номер друга зі списку');
   break;
  }
  case 'post-likers':{const people=state.likes.filter(l=>l.post_id===id).map(l=>byId(l.user_id)?.display_name||'Користувач KONTA');alert(people.length?'Вподобали допис:\n'+people.join('\n'):'Поки немає вподобань');break}\n case 'emoji-comment':{const input=$(`#post-${id} .comment-form input`);if(!input)break;const emoji=prompt('Вибери емодзі та скопіюй у поле:', '😀 😃 😄 😁 😂 🥰 😍 😎 😢 😭 😡 👍 ❤️ 🔥 🎉 🙌 💙');if(emoji){input.value=(input.value+' '+emoji.trim()).slice(0,500);input.focus()}break}\n case 'post-like':await togglePostLike(id);break;
