@@ -6,8 +6,9 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const imageSrc = url => typeof url==='string' && /^https:\/\//i.test(url) ? esc(url) : '';
 const idOK = value => typeof value==='string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(value);
 const fmtTime = value => {const d=new Date(value); if(Number.isNaN(d.valueOf()))return '';const diff=(Date.now()-d.getTime())/60000;if(diff>=0&&diff<1)return 'щойно';if(diff>=0&&diff<60)return `${Math.floor(diff)} хв тому`;if(diff>=0&&diff<1440)return `${Math.floor(diff/60)} год тому`;return new Intl.DateTimeFormat('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(d)};
-const state = {user:null,profile:null,profiles:[],posts:[],likes:[],comments:[],commentLikes:[],friends:[],follows:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
+const state = {user:null,profile:null,profiles:[],posts:[],stories:[],polls:[],pollOptions:[],pollVotes:[],likes:[],comments:[],commentLikes:[],friends:[],follows:[],groups:[],members:[],messages:[],notifications:[],albums:[],library:[],mediaScope:'all',mediaAlbumId:null,preferences:null,prefsAppliedForUser:null,chatReplyId:null,chatEditId:null,view:'feed',feedFilter:'all',friendsTab:'all',search:'',profileId:null,chatId:null,groupId:null,postGroupId:null,editing:false};
 const expandedComments = new Set();
+let pendingPoll=null;
 const messageDrafts = new Map();
 const pendingReactions = new Set();
 let peopleSearchTimer=null,peopleSearchVersion=0;
@@ -59,6 +60,10 @@ async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refre
   const queries = [
     ['profiles', db.from('profiles').select('*').limit(500)],
     ['posts',db.from('posts').select('*').order('created_at',{ascending:false}).limit(200)],
+    ['stories',db.from('stories').select('*').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(150)],
+    ['polls',db.from('polls').select('*').limit(300)],
+    ['pollOptions',db.from('poll_options').select('*').limit(1000)],
+    ['pollVotes',db.from('poll_votes').select('*').limit(3000)],
     ['likes',db.from('likes').select('*').limit(3000)],
     ['comments',db.from('comments').select('*').order('created_at',{ascending:true}).limit(3000)],
     ['commentLikes',db.from('comment_likes').select('*').limit(4000)],
@@ -174,6 +179,13 @@ function renderCommentNode(c,children,depth=0){
  <div class="comment-tools"><time>${esc(fmtTime(c.created_at))}</time>${c.edited_at?'<span class="comment-edited">змінено</span>':''}<button type="button" data-action="comment-reply" data-id="${esc(c.id)}">Відповісти</button>${own?`<button type="button" data-action="comment-edit-open" data-id="${esc(c.id)}">Редагувати</button>`:''}${canDelete?`<button type="button" data-action="comment-delete" data-id="${esc(c.id)}" title="${own?'Видалити свій коментар':'Прибрати коментар зі свого допису'}">Видалити</button>`:''}<button type="button" class="comment-heart ${liked?'is-liked':''}" aria-label="${liked?'Прибрати лайк з коментаря':'Вподобати коментар'}" aria-pressed="${liked}" data-action="comment-like" data-id="${esc(c.id)}">${liked?'♥':'♡'} <span>${likes.length||''}</span></button></div>
  </div></div>${replies.map(r=>renderCommentNode(r,children,Math.min(depth+1,3))).join('')}</div>`;
 }
+function postMedia(url){const src=imageSrc(url);if(!src)return '';const clean=url.split('?')[0].toLowerCase();if(/\.(mp4|webm)$/.test(clean))return `<video class="post-photo" src="${src}" controls preload="metadata" playsinline></video>`;if(/\.(mp3|m4a)$/.test(clean))return `<audio class="konta-post-audio" src="${src}" controls preload="metadata"></audio>`;return `<img class="post-photo" src="${src}" alt="Фото допису" loading="lazy">`}
+function pollCard(postId){
+ const poll=state.polls.find(p=>p.post_id===postId);if(!poll)return '';
+ const options=state.pollOptions.filter(o=>o.poll_id===poll.id),votes=state.pollVotes.filter(v=>v.poll_id===poll.id);
+ const mine=votes.find(v=>v.user_id===me());
+ return `<div class="konta-poll"><strong>📊 ${esc(poll.question)}</strong>${options.map(o=>{const count=votes.filter(v=>v.option_id===o.id).length;return `<button type="button" class="konta-poll-option ${mine?.option_id===o.id?'is-voted':''}" data-action="poll-vote" data-id="${esc(o.id)}" ${mine?'disabled':''}>${esc(o.label)} <span>${mine?`${count} голосів (${votes.length?Math.round(count/votes.length*100):0}%)`:''}</span></button>`}).join('')}<small>${votes.length} голосів</small></div>`;
+}
 function postCard(p){
  const author=byId(p.user_id)||{display_name:'Користувач KONTA',username:'user'};
  const group=p.community_id?state.groups.find(g=>g.id===p.community_id):null;
@@ -181,16 +193,52 @@ function postCard(p){
  const comments=state.comments.filter(c=>c.post_id===p.id);
  const children=new Map();for(const c of comments){if(c.parent_id&&comments.some(p=>p.id===c.parent_id)){if(!children.has(c.parent_id))children.set(c.parent_id,[]);children.get(c.parent_id).push(c)}}
  const roots=comments.filter(c=>!c.parent_id||!comments.some(p=>p.id===c.parent_id));
- const expanded=expandedComments.has(p.id);const shown=expanded?roots:roots.slice(-3);
+ const expanded=expandedComments.has(p.id);const shown=expanded?roots:[];
  const commentsHtml=shown.map(c=>renderCommentNode(c,children)).join('');
  return `<article class="post" id="post-${esc(p.id)}">
  <div class="post-head">${avatar(author)}<div class="post-identity"><strong data-action="profile-open" data-id="${esc(p.user_id)}">${esc(author.display_name)}</strong><small>@${esc(author.username)} · ${esc(fmtTime(p.created_at))}${group?` · <a href="#" data-action="group-open" data-id="${esc(group.id)}">${esc(group.name)}</a>`:''}</small></div></div>
- ${p.body?`<div class="post-text">${esc(p.body)}</div>`:''}${imageSrc(p.media_url)?`<img class="post-photo" src="${imageSrc(p.media_url)}" alt="Фото допису" loading="lazy">`:''}
- <div class="post-actions"><button data-action="post-like" data-id="${esc(p.id)}" class="${liked?'is-liked':''}"><span>${liked?'♥':'♡'}</span>${postLikes.length}</button><button data-action="comment-focus" data-id="${esc(p.id)}"><span>▢</span>${comments.length} коментарів</button><button data-action="share" data-id="${esc(p.id)}"><span>↗</span>Поділитись</button>${p.user_id===me()?`<button class="post-delete" title="Видалити допис" data-action="post-delete" data-id="${esc(p.id)}">✕</button>`:''}</div>
- <div class="comment-area">${roots.length>3?`<button type="button" class="comment-more" data-action="comment-expand" data-id="${esc(p.id)}">${expanded?'Згорнути коментарі':`Показати всі коментарі (${comments.length})`}</button>`:''}
- ${commentsHtml}<form class="comment-form" data-post-id="${esc(p.id)}"><div class="reply-banner" hidden><span class="reply-caption"></span><button type="button" data-action="comment-reply-cancel" data-id="${esc(p.id)}" aria-label="Скасувати відповідь">×</button></div><div class="comment-form-row">${avatar(state.profile,'sm')}<input name="comment" maxlength="500" required placeholder="Написати коментар..." autocomplete="off"><button type="submit">Надіслати</button></div></form></div></article>`;
+ ${p.body?`<div class="post-text">${esc(p.body)}</div>`:''}${pollCard(p.id)}${postMedia(p.media_url)}
+ <div class="post-actions"><button data-action="post-like" data-id="${esc(p.id)}" class="${liked?'is-liked':''}"><span>${liked?'♥':'♡'}</span>${postLikes.length}</button>${postLikes.length?`<button type="button" data-action="post-likers" data-id="${esc(p.id)}" aria-label="Переглянути, кому сподобався допис">Хто вподобав</button>`:''}<button data-action="comment-focus" data-id="${esc(p.id)}"><span>▢</span>${comments.length} коментарів</button><button data-action="share" data-id="${esc(p.id)}"><span>↗</span>Поділитись</button>${p.user_id===me()?`<button class="post-delete" title="Видалити допис" data-action="post-delete" data-id="${esc(p.id)}">✕</button>`:''}</div>
+ <div class="comment-area" ${expanded?'':'hidden'}>${roots.length>3?`<button type="button" class="comment-more" data-action="comment-expand" data-id="${esc(p.id)}">${expanded?'Згорнути коментарі':`Показати всі коментарі (${comments.length})`}</button>`:''}
+ ${commentsHtml}<form class="comment-form" data-post-id="${esc(p.id)}"><div class="reply-banner" hidden><span class="reply-caption"></span><button type="button" data-action="comment-reply-cancel" data-id="${esc(p.id)}" aria-label="Скасувати відповідь">×</button></div><div class="comment-form-row">${avatar(state.profile,'sm')}<input name="comment" maxlength="500" required placeholder="Написати коментар..." autocomplete="off"><button type="button" data-action="emoji-comment" data-id="${esc(p.id)}" aria-label="Додати емодзі">😊</button><button type="submit">Надіслати</button></div></form></div></article>`;
 }
 function empty(title,detail,emoji='♡'){return `<div class="panel"><div class="empty"><span class="empty-emoji">${emoji}</span><strong>${esc(title)}</strong>${esc(detail)}</div></div>`}
+function storyStrip(){
+ const followed=new Set([...friendIds(),...state.follows.filter(f=>f.follower_id===me()).map(f=>f.followed_id),me()]);
+ const visible=state.stories.filter(st=>followed.has(st.user_id)&&new Date(st.expires_at)>new Date());
+ const seen=new Set();const unique=visible.filter(st=>{if(seen.has(st.user_id))return false;seen.add(st.user_id);return true});
+ return `<section class="konta-stories" aria-label="Історії друзів та підписок"><button type="button" class="konta-story add" data-action="story-create"><span class="story-ring">＋</span><small>Моя історія</small></button>${unique.map(st=>`<button type="button" class="konta-story" data-action="story-view" data-id="${esc(st.id)}"><span class="story-ring">${avatar(byId(st.user_id))}</span><small>${esc((byId(st.user_id)?.display_name||'Користувач').split(' ')[0])}</small></button>`).join('')}${!unique.length?'<span class="story-empty">Історії друзів та підписок з’являться тут</span>':''}</section>`;
+}
+async function createStory(){
+ const picker=document.createElement('input');picker.type='file';picker.accept='image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm';picker.onchange=async()=>{
+ const file=picker.files?.[0];if(!file)return;
+ try{
+ if(file.size>15*1024*1024)throw Error('Історія має бути до 15 МБ.');
+ if(!['image/png','image/jpeg','image/webp','image/gif','video/mp4','video/webm'].includes(file.type))throw Error('Оберіть фото або MP4/WebM.');
+ toast('Завантажуємо історію...');
+ const ext=file.name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';
+ const path=`${me()}/story-${crypto.randomUUID()}.${ext}`;
+ const {error:uploadError}=await db.storage.from('konta-media').upload(path,file,{contentType:file.type,upsert:false});
+ if(uploadError)throw uploadError;
+ const url=db.storage.from('konta-media').getPublicUrl(path).data.publicUrl;
+ const {error}=await db.from('stories').insert({user_id:me(),media_url:url,media_type:file.type.startsWith('video/')?'video':'image'});
+ if(error)throw error;
+ await loadAll(true);render();toast('Історію додано на 24 години!');
+ }catch(e){toast(errText(e))}
+ };picker.click();
+}
+function showStory(id){
+ const st=state.stories.find(x=>x.id===id);if(!st)return;
+ const overlay=document.createElement('div');overlay.className='konta-story-overlay';
+ const media=st.media_type==='video'?document.createElement('video'):document.createElement('img');
+ media.src=st.media_url;media.className='konta-story-media';
+ if(st.media_type==='video'){media.controls=true;media.autoplay=true;media.playsInline=true}
+ const close=document.createElement('button');close.textContent='✕ Закрити';close.className='konta-story-close';close.onclick=()=>overlay.remove();
+ overlay.append(close,media);
+ if(st.user_id===me()){const del=document.createElement('button');del.textContent='Видалити історію';del.className='konta-story-delete';del.onclick=async()=>{const {error}=await db.from('stories').delete().eq('id',st.id).eq('user_id',me());if(error){toast(errText(error));return}overlay.remove();await loadAll(true);render()};overlay.append(del)}
+ overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.append(overlay);
+}
+
 function viewFeed(){
  let posts=[...state.posts];
  if(state.feedFilter==='friends')posts=posts.filter(p=>friendIds().includes(p.user_id)&&!p.community_id);
@@ -198,7 +246,7 @@ function viewFeed(){
  else if(state.feedFilter==='mine')posts=posts.filter(p=>p.user_id===me());
  else if(state.feedFilter==='liked')posts=posts.filter(p=>state.likes.some(l=>l.user_id===me()&&l.post_id===p.id));
  const filters=[['all','Усі новини'],['friends','Друзі'],['groups','Спільноти'],['mine','Мої'],['liked','Сподобалося']];
- return `<section class="feed-hero" aria-label="Вітаємо у KONTA"><div><div class="hero-eyebrow">Твій простір онлайн</div><h1 class="page-title">Привіт, ${esc(myName().split(' ')[0])}! 👋</h1><p class="hero-subtitle">Твої новини, друзі та нові знайомства — усе тут.</p></div><button class="btn primary hero-action" type="button" data-action="post-open">＋ Створити допис</button></section>${composer()}<div class="panel">${tabs(filters,state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('У цій стрічці поки порожньо','Додай друзів, підпишись на спільноти чи створи допис.','✎')}`;
+ return `${storyStrip()}${composer()}<div class="panel">${tabs(filters,state.feedFilter,'feed-tab')}</div>${posts.length?posts.map(postCard).join(''):empty('У цій стрічці поки порожньо','Додай друзів, підпишись на спільноти чи створи допис.','✎')}`;
 }
 function viewProfile(){
  const uid=state.profileId||me(),p=byId(uid);
@@ -299,12 +347,12 @@ function viewNotifications(){
 }
 function render(){if(!state.user)return;$$('[data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));renderSuggestions();const views={feed:viewFeed,profile:viewProfile,friends:viewFriends,explore:viewExplore,photos:viewPhotos,videos:viewVideos,music:viewMusic,settings:viewSettings,bookmarks:viewBookmarks,groups:viewGroups,group:viewGroup,messages:viewMessages,notifications:viewNotifications};$('#main').innerHTML=initialLoadError?setupError():(views[state.view]||viewFeed)();$('#main').dataset.renderedView=state.view;if(state.view==='messages'){$('#messageScroll')?.scrollTo(0,999999)} }
 function go(view,opts={}){state.view=view;if('userId'in opts)state.profileId=opts.userId;if('chatId'in opts)state.chatId=opts.chatId;if('groupId'in opts)state.groupId=opts.groupId;if('search'in opts){state.search=opts.search;if(view==='explore')schedulePeopleSearch(state.search)}render();if(window.innerWidth<720)window.scrollTo({top:0,behavior:'smooth'})}
-function openPost(groupId=null){state.postGroupId=groupId;$('#postText').value='';$('#postFile').value='';$('#postFileLabel').textContent='До 8 МБ';$('#postPreview').hidden=true;feedback('#postFeedback','');$('#postDialog').showModal()}
+function openPost(groupId=null){pendingPoll=null;let pollBtn=$('#kontaPollBtn');if(!pollBtn){pollBtn=document.createElement('button');pollBtn.id='kontaPollBtn';pollBtn.type='button';pollBtn.className='btn secondary small';pollBtn.textContent='📊 Додати опитування';pollBtn.onclick=()=>{const question=prompt('Питання опитування:');if(!question)return;const choices=prompt('Варіанти відповідей через крапку з комою (2–6):','Так;Ні');if(!choices)return;const options=choices.split(';').map(x=>x.trim()).filter(Boolean);if(options.length<2||options.length>6){toast('Потрібно 2–6 варіантів');return}pendingPoll={question:question.slice(0,250),options:options.map(x=>x.slice(0,120))};pollBtn.textContent='📊 Опитування додано ✓'};$('#postText').after(pollBtn)}pollBtn.textContent='📊 Додати опитування';state.postGroupId=groupId;$('#postText').value='';$('#postFile').value='';$('#postFileLabel').textContent='Фото, відео або аудіо до 15 МБ';$('#postPreview').hidden=true;feedback('#postFeedback','');$('#postDialog').showModal()}
 function openProfileEditor(){const p=state.profile;if(!p)return;const parts=(p.display_name||'').trim().split(/\s+/);$('#profileName').value=parts.shift()||'';$('#profileSurname').value=parts.join(' ');$('#profileUsername').value=p.username;$('#profileBio').value=p.bio||'';$('#avatarFile').value='';feedback('#profileFeedback','');$('#profileDialog').showModal()}
-function verifyFile(file,avatarMode=false){if(!file)return null;const types=avatarMode?['image/png','image/jpeg','image/webp']:['image/png','image/jpeg','image/webp','image/gif'];if(!types.includes(file.type))throw Error('Підтримуються лише JPG, PNG, WebP'+(avatarMode?'':' та GIF')+'.');if(file.size>8*1024*1024)throw Error('Зображення має бути не більше 8 МБ.');return file}
-async function uploadImage(file,kind){verifyFile(file,kind==='avatar');const ext=({"image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif"})[file.type];const filePath=`${me()}/${kind}-${crypto.randomUUID()}.${ext}`;const {error}=await db.storage.from('konta-media').upload(filePath,file,{contentType:file.type,upsert:false,cacheControl:'3600'});if(error)throw error;const {data}=db.storage.from('konta-media').getPublicUrl(filePath);return data.publicUrl}
+function verifyFile(file,avatarMode=false){if(!file)return null;const types=avatarMode?['image/png','image/jpeg','image/webp']:['image/png','image/jpeg','image/webp','image/gif','video/mp4','video/webm','audio/mpeg','audio/mp4'];if(!types.includes(file.type))throw Error('Підтримуються лише JPG, PNG, WebP'+(avatarMode?'':' та GIF')+'.');if(file.size>(avatarMode?8:15)*1024*1024)throw Error('Файл має бути не більше '+(avatarMode?8:15)+' МБ.');return file}
+async function uploadImage(file,kind){verifyFile(file,kind==='avatar');const ext=({"image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif","video/mp4":"mp4","video/webm":"webm","audio/mpeg":"mp3","audio/mp4":"m4a"})[file.type];const filePath=`${me()}/${kind}-${crypto.randomUUID()}.${ext}`;const {error}=await db.storage.from('konta-media').upload(filePath,file,{contentType:file.type,upsert:false,cacheControl:'3600'});if(error)throw error;const {data}=db.storage.from('konta-media').getPublicUrl(filePath);return data.publicUrl}
 async function handleAuthSubmit(ev){ev.preventDefault();if(!db){feedback('#authFeedback','Підключення не налаштоване. Перевір config.js.',true);return}const email=$('#authEmail').value.trim(),password=$('#authPassword').value;setBusy('#authSubmit',true);feedback('#authFeedback','Підключаємось...');try{if(authMode==='signup'){const first=$('#authName').value.trim(),last=$('#authSurname').value.trim();if(!first||!last)throw Error('Ім’я та прізвище обов’язкові.');if(!/^[\p{L}\p{M}][\p{L}\p{M}’'\- ]*$/u.test(first)||!/^[\p{L}\p{M}][\p{L}\p{M}’'\- ]*$/u.test(last))throw Error('Введи коректні ім’я та прізвище.');const name=first+' '+last;const {data,error}=await db.auth.signUp({email,password,options:{data:{display_name:name},emailRedirectTo:location.origin+location.pathname}});if(error)throw error;if(!data.session)feedback('#authFeedback','Акаунт створено! Перевір пошту та натисни посилання для підтвердження. Потім увійди.');else await signedIn(data.user)}else if(authMode==='reset'){const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});if(error)throw error;feedback('#authFeedback','Якщо такий email існує, на нього прийде лист для відновлення пароля.')}else{const {data,error}=await db.auth.signInWithPassword({email,password});if(error)throw error;await signedIn(data.user)}}catch(error){feedback('#authFeedback',errText(error),true)}finally{setBusy('#authSubmit',false)}}
-async function handlePostSubmit(ev){ev.preventDefault();if(loading)return;loading=true;setBusy('#postSubmit',true);feedback('#postFeedback','Публікуємо...');try{const text=$('#postText').value.trim();const file=$('#postFile').files[0];if(!text&&!file)throw Error('Напиши текст або додай фото.');const image=file?await uploadImage(file,'post'):null;const {error}=await db.from('posts').insert({user_id:me(),body:text,media_url:image,community_id:state.postGroupId});if(error)throw error;$('#postDialog').close();if(state.postGroupId)go('group',{groupId:state.postGroupId});else go('feed');await afterChange('Допис опубліковано!')}catch(error){feedback('#postFeedback',errText(error),true)}finally{loading=false;setBusy('#postSubmit',false)}}
+async function handlePostSubmit(ev){ev.preventDefault();if(loading)return;loading=true;setBusy('#postSubmit',true);feedback('#postFeedback','Публікуємо...');try{const text=$('#postText').value.trim();const file=$('#postFile').files[0];if(!text&&!file&&!pendingPoll)throw Error('Напиши текст, додай фото або опитування.');const image=file?await uploadImage(file,'post'):null;const {data:created,error}=await db.from('posts').insert({user_id:me(),body:text,media_url:image,community_id:state.postGroupId}).select('id').single();if(error)throw error;if(pendingPoll){const {data:poll,error:pollError}=await db.from('polls').insert({post_id:created.id,question:pendingPoll.question}).select('id').single();if(pollError)throw pollError;const {error:optionsError}=await db.from('poll_options').insert(pendingPoll.options.map(label=>({poll_id:poll.id,label})));if(optionsError)throw optionsError;pendingPoll=null}$('#postDialog').close();if(state.postGroupId)go('group',{groupId:state.postGroupId});else go('feed');await afterChange('Допис опубліковано!')}catch(error){feedback('#postFeedback',errText(error),true)}finally{loading=false;setBusy('#postSubmit',false)}}
 async function handleProfileSubmit(ev){ev.preventDefault();if(loading)return;loading=true;setBusy('#profileSubmit',true);feedback('#profileFeedback','Зберігаємо...');try{const first=$('#profileName').value.trim(),last=$('#profileSurname').value.trim(),name=first+' '+last,username=$('#profileUsername').value.trim().toLowerCase(),bio=$('#profileBio').value.trim();if(!/^[a-z0-9_]{3,24}$/.test(username))throw Error('Нікнейм: 3–24 латинські літери, цифри або _.');if(!first||!last)throw Error('Ім’я та прізвище обов’язкові.');if(!/^[\p{L}\p{M}][\p{L}\p{M}’'\- ]*$/u.test(first)||!/^[\p{L}\p{M}][\p{L}\p{M}’'\- ]*$/u.test(last))throw Error('Введи коректні ім’я та прізвище.');const file=$('#avatarFile').files[0];const avatar_url=file?await uploadImage(file,'avatar'):state.profile?.avatar_url||null;const {error}=await db.from('profiles').update({display_name:name,username,bio,avatar_url}).eq('id',me());if(error)throw error;$('#profileDialog').close();await afterChange('Профіль оновлено!')}catch(error){feedback('#profileFeedback',errText(error),true)}finally{loading=false;setBusy('#profileSubmit',false)}}
 async function handleGroupSubmit(ev){ev.preventDefault();if(loading)return;loading=true;setBusy('#groupSubmit',true);feedback('#groupFeedback','Створюємо...');try{const name=$('#groupName').value.trim(),description=$('#groupDescription').value.trim();const {data,error}=await db.from('communities').insert({owner_id:me(),name,description}).select('id').single();if(error)throw error;const join=await db.from('community_members').insert({community_id:data.id,user_id:me()});if(join.error)throw join.error;$('#groupDialog').close();await afterChange('Спільноту створено!');go('group',{groupId:data.id})}catch(error){feedback('#groupFeedback',errText(error),true)}finally{loading=false;setBusy('#groupSubmit',false)}}
 async function handleResetSubmit(ev){ev.preventDefault();const pw=$('#resetPassword').value;if(pw.length<6)return feedback('#resetFeedback','Мінімум 6 символів.',true);const {error}=await db.auth.updateUser({password:pw});if(error){feedback('#resetFeedback',errText(error),true);return}$('#resetDialog').close();toast('Пароль змінено.');}
@@ -534,10 +582,12 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'chat-open':if(idOK(id)){state.chatReplyId=null;state.chatEditId=null;go('messages',{chatId:id});}break;
  case 'group-open':if(idOK(id))go('group',{groupId:id});break;
  case 'group-create':$('#groupName').value='';$('#groupDescription').value='';feedback('#groupFeedback','');$('#groupDialog').showModal();break;
+ case 'story-create':await createStory();break;
+ case 'story-view':showStory(id);break;
  case 'feed-tab':state.feedFilter=id;render();break;
  case 'friends-tab':state.friendsTab=id;render();if(id==='people'&&state.friendSearch)schedulePeopleSearch(state.friendSearch);break;
- case 'comment-focus':$('#post-'+id+' .comment-form input')?.focus();break;
- case 'comment-expand':{if(expandedComments.has(id))expandedComments.delete(id);else expandedComments.add(id);paintPostComments(id);break}
+ case 'comment-focus':{expandedComments.add(id);paintPostComments(id);const area=$('#post-'+id+' .comment-area');if(area)area.hidden=false;area?.querySelector('.comment-form input')?.focus();break}
+ case 'comment-expand':{if(expandedComments.has(id))expandedComments.delete(id);else expandedComments.add(id);paintPostComments(id);const area=$('#post-'+id+' .comment-area');if(area)area.hidden=!expandedComments.has(id);break}
  case 'comment-reply':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;expandedComments.add(comment.post_id);paintPostComments(comment.post_id);const form=$(`#post-${comment.post_id} .comment-form`);if(!form)break;form.dataset.parentId=id;$('.reply-banner',form).hidden=false;$('.reply-caption',form).textContent=`Відповідь для ${byId(comment.user_id)?.display_name||'користувача'}`;const input=$('[name="comment"]',form);input.placeholder='Напишіть відповідь...';input.focus();break}
  case 'comment-reply-cancel':{const form=$(`#post-${id} .comment-form`);if(!form)break;delete form.dataset.parentId;$('.reply-banner',form).hidden=true;const input=$('[name="comment"]',form);input.placeholder='Написати коментар...';input.focus();break}
  case 'comment-edit-open':openCommentEditor(id);break;
@@ -550,14 +600,29 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'chat-copy':{const m=state.messages.find(x=>x.id===id&&((x.sender_id===me()&&x.recipient_id===state.chatId)||(x.recipient_id===me()&&x.sender_id===state.chatId)));if(!m)break;if(navigator.clipboard){await navigator.clipboard.writeText(m.body);toast('Повідомлення скопійовано');}else toast('Копіювання недоступне у браузері');break}
  case 'chat-delete':{const m=state.messages.find(x=>x.id===id&&x.sender_id===me());if(!m)break;if(!confirm('Видалити своє повідомлення в обох учасників розмови?'))break;const {error}=await db.from('private_messages').delete().eq('id',m.id).eq('sender_id',me());if(error)throw error;if(state.chatEditId===id)state.chatEditId=null;if(state.chatReplyId===id)state.chatReplyId=null;await afterChange('Повідомлення видалено');break}
 
- case 'emoji-insert':{const el=$('#messageForm textarea');if(!el)break;const start=el.selectionStart,end=el.selectionEnd;el.value=el.value.slice(0,start)+'🙂'+el.value.slice(end);el.selectionStart=el.selectionEnd=start+2;messageDrafts.set(state.chatId,el.value);el.focus();break} 
+ case 'emoji-insert':{const el=$('#messageForm textarea');if(!el)break;const emoji=prompt('Вибери емодзі або встав свій:', '😀 😁 😂 🤣 😊 😍 🥰 😘 😎 🥳 😢 😭 😡 🤔 👍 👎 ❤️ 💙 💚 🔥 🎉 🙌 👏 💯');if(!emoji)break;const start=el.selectionStart,end=el.selectionEnd;el.value=el.value.slice(0,start)+emoji.trim()+el.value.slice(end);el.selectionStart=el.selectionEnd=start+emoji.trim().length;messageDrafts.set(state.chatId,el.value);el.focus();break} 
  case 'post-find':{const p=state.posts.find(p=>p.id===id);if(p?.community_id)go('group',{groupId:p.community_id});else go('feed');setTimeout(()=>$('#post-'+id)?.scrollIntoView({behavior:'smooth',block:'center'}),80);break}
  case 'share':{
   const p=state.posts.find(p=>p.id===id);if(!p)break;
   const url=location.origin+location.pathname+'#post='+encodeURIComponent(p.id);
-  if(navigator.share){try{await navigator.share({title:'KONTA',text:p.body?.slice(0,130)||'Допис у KONTA',url})}catch(_){}}else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Посилання на допис скопійовано')}else toast('Копіювання недоступне');
+  const friends=friendIds().map(uid=>({id:uid,name:byId(uid)?.display_name||'Користувач'}));
+  const options=friends.map((f,i)=>`${i+1}. ${f.name}`).join('\n');
+  const choice=prompt('Поділитися дописом у КОНТА:\n'+(options||'Поки немає друзів')+'\n\nВведи номер друга або 0, щоб скопіювати посилання:','0');
+  if(choice===null)break;
+  const selected=Number(choice);
+  if(Number.isInteger(selected)&&selected>=1&&selected<=friends.length){
+   const friend=friends[selected-1];
+   const {error}=await db.from('private_messages').insert({sender_id:me(),recipient_id:friend.id,body:'Поділився(-лася) дописом у КОНТА: '+url});
+   if(error)throw error;
+   toast('Допис надіслано: '+friend.name);
+  }else if(choice.trim()==='0'){
+   if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Посилання скопійовано')}else toast(url);
+  }else toast('Вибери номер друга зі списку');
   break;
  }
+ case 'post-likers':{const people=state.likes.filter(l=>l.post_id===id).map(l=>byId(l.user_id)?.display_name||'Користувач KONTA');alert(people.length?'Вподобали допис:\n'+people.join('\n'):'Поки немає вподобань');break}
+ case 'emoji-comment':{const input=$(`#post-${id} .comment-form input`);if(!input)break;const emoji=prompt('Вибери емодзі та скопіюй у поле:', '😀 😃 😄 😁 😂 🥰 😍 😎 😢 😭 😡 👍 ❤️ 🔥 🎉 🙌 💙');if(emoji){input.value=(input.value+' '+emoji.trim()).slice(0,500);input.focus()}break}
+ case 'poll-vote':{const option=state.pollOptions.find(o=>o.id===id);if(!option)break;const {error}=await db.from('poll_votes').insert({poll_id:option.poll_id,option_id:id,user_id:me()});if(error)throw error;await loadAll(true);render();toast('Голос враховано');break}
  case 'post-like':await togglePostLike(id);break;
  case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;state.posts=state.posts.filter(x=>x.id!==id);document.getElementById('post-'+id)?.remove();toast('Допис видалено');break}
  case 'comment-delete':{
@@ -661,7 +726,7 @@ function wireEvents(){
  $('#profileForm').addEventListener('submit',handleProfileSubmit);
  $('#groupForm').addEventListener('submit',handleGroupSubmit);
  $('#resetForm').addEventListener('submit',handleResetSubmit);
- $('#postFile').addEventListener('change',event=>{try{const file=verifyFile(event.target.files[0]);if(!file)return;$('#postFileLabel').textContent=`${file.name} (${(file.size/1048576).toFixed(1)} МБ)`;const preview=$('#postPreview');preview.src=URL.createObjectURL(file);preview.hidden=false;}catch(error){event.target.value='';feedback('#postFeedback',errText(error),true)}});
+ $('#postFile').addEventListener('change',event=>{try{const file=verifyFile(event.target.files[0]);if(!file)return;$('#postFileLabel').textContent=`${file.name} (${(file.size/1048576).toFixed(1)} МБ)`;const preview=$('#postPreview');if(file.type.startsWith('image/')){preview.src=URL.createObjectURL(file);preview.hidden=false}else{preview.hidden=true}}catch(error){event.target.value='';feedback('#postFeedback',errText(error),true)}});
  $('#settingsBtn').addEventListener('click',openProfileEditor);
  $('#mobileSettingsBtn').addEventListener('click',()=>{document.querySelector('.mobile-more')?.removeAttribute('open');openProfileEditor()});
  $('#mobileCreate').addEventListener('click',()=>openPost());
