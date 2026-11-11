@@ -16,6 +16,7 @@ const conf=window.KONTA_CONFIG || {};
 const configured = /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(conf.supabaseUrl||'') && /^(sb_publishable_|eyJ)/.test(conf.supabasePublishableKey||'');
 const db = configured && window.supabase?.createClient ? window.supabase.createClient(conf.supabaseUrl,conf.supabasePublishableKey,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}}) : null;
 let authMode='login', loading=false, authBoot=false, liveChannel=null, pollId=null, initialLoadError=null, refreshInFlight=false, refreshScheduled=false, lastToastTimer=null;
+let lastKnownNotificationIds=null;
 const me = () => state.user?.id;
 const byId = id => state.profiles.find(p=>p.id===id) || (id===me() ? state.profile : null);
 const myName = () => state.profile?.display_name || state.user?.email?.split('@')[0] || 'Ти';
@@ -25,7 +26,7 @@ function feedback(selector,message,isError=false){const el=$(selector);if(el){el
 function toast(text){const node=$('#toast');node.textContent=text;node.classList.add('show');clearTimeout(lastToastTimer);lastToastTimer=setTimeout(()=>node.classList.remove('show'),3200)}
 function setBusy(selector,busy){const node=$(selector);if(node)node.disabled=busy}
 function errText(error){const msg=error?.message||String(error||'Невідома помилка');if(/Invalid login credentials/i.test(msg))return 'Неправильний email або пароль.';if(/Email not confirmed/i.test(msg))return 'Спочатку підтверди email за посиланням у пошті.';if(/User already registered/i.test(msg))return 'Цей email уже зареєстрований.';if(/Password should be at least/i.test(msg))return 'Пароль занадто короткий.';if(/Failed to fetch|NetworkError|fetch failed/i.test(msg))return 'Немає з’єднання. Перевір інтернет і онови сторінку.';if(/duplicate key|unique constraint/i.test(msg))return 'Це ім’я користувача вже зайняте.';if(/relation .* does not exist|schema cache|Could not find the table/i.test(msg))return 'Потрібно один раз запустити SETUP_SUPABASE.sql у Supabase → SQL Editor.';return msg}
-function showAuth(){state.user=null;state.profile=null;state.prefsAppliedForUser=null;state.chatReplyId=null;state.chatEditId=null;$('#app').hidden=true;$('#authScreen').hidden=false;if(liveChannel&&db){db.removeChannel(liveChannel);liveChannel=null}clearInterval(pollId);pollId=null;}
+function showAuth(){lastKnownNotificationIds=null;state.user=null;state.profile=null;state.prefsAppliedForUser=null;state.chatReplyId=null;state.chatEditId=null;$('#app').hidden=true;$('#authScreen').hidden=false;if(liveChannel&&db){db.removeChannel(liveChannel);liveChannel=null}clearInterval(pollId);pollId=null;}
 function changeAuthMode(mode){authMode=mode;$$('[data-mode]').forEach(b=>b.classList.toggle('is-active',b.dataset.mode===mode));$('#authNameRow').hidden=mode!=='signup';$('#authName').required=mode==='signup';$('#authPasswordRow').hidden=mode==='reset';$('#authPassword').required=mode!=='reset';$('#forgotBtn').textContent=mode==='reset'?'Повернутися до входу':'Забув пароль?';$('#authHeading').textContent=mode==='signup'?'Створи свою сторінку':mode==='reset'?'Відновити пароль':'З поверненням!';$('#authHint').textContent=mode==='signup'?'Реєстрація безкоштовна.':'Вкажи пошту — надішлемо посилання для відновлення.';if(mode==='login')$('#authHint').textContent='Увійди, щоб побачити новини друзів.';$('#authSubmit').textContent=mode==='signup'?'Зареєструватися':mode==='reset'?'Надіслати лист':'Увійти';$('#authPassword').autocomplete=mode==='signup'?'new-password':'current-password';feedback('#authFeedback','');}
 function showApp(changed=null){
  if(!state.user)return;
@@ -74,6 +75,9 @@ async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refre
   if(id!==me())return;
   changed=results.filter(([name,data])=>JSON.stringify(state[name])!==JSON.stringify(data)).map(([name])=>name);
   for(const [name,data] of results)state[name]=data;
+  const newNotices=lastKnownNotificationIds===null?[]:state.notifications.filter(n=>!n.is_read&&!lastKnownNotificationIds.has(n.id));
+  lastKnownNotificationIds=new Set(state.notifications.map(n=>n.id));
+  if(newNotices.length&&document.visibilityState==='visible')toast('🔔 Нове сповіщення у KONTA');
   if(state.searchRemoteMatches?.length){
    const known=new Set(state.profiles.map(p=>p.id));
    for(const p of state.searchRemoteMatches)if(!known.has(p.id)){state.profiles.push(p);known.add(p.id)}
@@ -153,7 +157,7 @@ function schedulePeopleSearch(query){
  },300);
 }
 
-function renderSuggestions(){const candidates=state.profiles.filter(p=>p.id!==me()&&!friendRecord(p.id)).slice(0,4);$('#suggestions').innerHTML=candidates.map(p=>personRow(p)).join('')||'<p class="subtle">Запроси друзів — вони з’являться тут.</p>';const count=state.friends.filter(f=>f.status==='pending'&&f.addressee_id===me()).length;$('#requestsBubble').hidden=!count;$('#requestsBubble').textContent=count;const unread=state.notifications.some(n=>!n.is_read);$('#noticeDot').hidden=!unread}
+function renderSuggestions(){const candidates=state.profiles.filter(p=>p.id!==me()&&!friendRecord(p.id)).slice(0,4);$('#suggestions').innerHTML=candidates.map(p=>personRow(p)).join('')||'<p class="subtle">Запроси друзів — вони з’являться тут.</p>';const count=state.friends.filter(f=>f.status==='pending'&&f.addressee_id===me()).length;$('#requestsBubble').hidden=!count;$('#requestsBubble').textContent=count;const unread=state.notifications.filter(n=>!n.is_read).length;const badge=$('#noticeDot');if(badge){badge.hidden=!unread;badge.textContent=unread>99?'99+':String(unread)}const nav=$('[data-nav="notifications"]');if(nav)nav.setAttribute('aria-label',`Сповіщення${unread?' — '+unread+' непрочитаних':''}`);document.querySelectorAll('.bottom-nav [data-nav="notifications"]').forEach(el=>{el.classList.toggle('has-unread',unread>0);el.setAttribute('aria-label',`Сповіщення${unread?' — '+unread+' непрочитаних':''}`)})}
 function header(title,right=''){return `<div class="panel-header"><h2>${esc(title)}</h2>${right}</div>`}
 function composer(){return `<div class="panel composer-teaser">${avatar(state.profile)}<button data-action="post-open">Що нового, ${esc(myName().split(' ')[0])}?</button><button class="tiny-action" title="Фото" data-action="post-open">▧</button></div>`}
 function tabs(items,current,action){return `<div class="feed-tabs">${items.map(([key,label])=>`<button class="${current===key?'is-active':''}" data-action="${action}" data-id="${esc(key)}">${esc(label)}</button>`).join('')}</div>`}
@@ -210,18 +214,18 @@ function viewProfile(){
  `${friendAction(uid)} <button class="btn primary small" data-action="chat-open" data-id="${esc(uid)}">Написати повідомлення</button>`;
  const friendGrid=friends.slice(0,6).map(x=>`<button data-action="profile-open" data-id="${esc(x.id)}" title="${esc(x.display_name)}">${avatar(x,'sm')}<span>${esc(x.display_name.split(' ')[0])}</span></button>`).join('');
  const images=photoUrls.map(src=>`<img src="${imageSrc(src)}" loading="lazy" alt="Фото користувача">`).join('');
- return `<div class="profile-classic">
+ return `<div class="profile-classic kp-profile"><div class="kp-cover"><span class="kp-cover-kicker">KONTA · ПРОФІЛЬ</span><span class="kp-cover-art" aria-hidden="true">✦</span></div>
  <aside class="profile-classic-rail">
   <div class="panel profile-photo-card">${avatar(p,'lg')}${own?'<button class="btn soft small" data-action="profile-edit">Змінити фотографію</button>':`<button class="btn primary small" data-action="chat-open" data-id="${esc(uid)}">Написати</button>`}</div>
   <div class="panel"><h3 class="classic-section-title">Друзі <span>${friends.length}</span></h3><div class="classic-peek"><div class="classic-friend-grid">${friendGrid||'<span class="subtle">Поки немає друзів</span>'}</div></div></div>
   <div class="panel"><h3 class="classic-section-title">Фотографії <span>${photoUrls.length}</span></h3><div class="classic-peek"><div class="classic-mini-photos">${images||'<span class="subtle">Поки немає фото</span>'}</div></div></div>
  </aside>
  <section class="classic-profile-main">
-  <div class="panel profile-summary">
-   <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}</h1><span>@${esc(p.username)}</span></div>
+  <div class="panel profile-summary"><div class="kp-mobile-identity">${avatar(p,'lg')}<div class="kp-mobile-identity-name"><strong>${esc(p.display_name)}</strong><span>@${esc(p.username)}</span></div></div>
+   <div class="classic-page-heading"><h1 class="profile-classic-name">${esc(p.display_name)}</h1><span class="kp-handle">@${esc(p.username)}</span><span class="kp-member-pill">✦ У KONTA</span></div>
    <div class="profile-classic-meta"><span>Про себе:</span><strong class="profile-classic-about">${esc(p.bio||'Тут ще немає інформації')}</strong><span>У KONTA:</span><strong>${esc(fmtTime(p.created_at))}</strong></div>
    <div class="profile-classic-actions">${actions}</div>
-   <div class="profile-stats"><button data-nav="friends"><b>${friends.length}</b>друзів</button><button data-nav="photos"><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button data-nav="groups"><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button></div>
+   <div class="profile-stats"><button ${own?'data-nav="friends"':'type="button" disabled title="Загальна кількість друзів недоступна"'}><b>${own?friends.length:'—'}</b>друзів</button><button ${own?'data-nav="photos"':'type="button" disabled'}><b>${libraryPhotos.length+postPhotos.length}</b>фото</button><button ${own?'data-nav="groups"':'type="button" disabled'}><b>${state.members.filter(x=>x.user_id===uid).length}</b>спільнот</button></div>
   </div>
   ${own?composer():''}
   <h3 class="section-heading">Стіна · ${posts.length} записів</h3>
