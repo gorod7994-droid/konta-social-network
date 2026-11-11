@@ -180,6 +180,6 @@ function init(){
   mq.addEventListener?.('change',()=>{if(getPrefs().theme==='system')applyPreferences(getPrefs());});
  }
 }
-window.KONTA_CLASSIC={renderSettings,applyPreferences,action,safePrefs};
+window.KONTA_CLASSIC={renderSettings,applyPreferences,action,safePrefs,translateUI};
 init();
 })();
