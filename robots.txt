@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://konta.pp.ua/sitemap.xml
