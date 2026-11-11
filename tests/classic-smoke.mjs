@@ -20,7 +20,7 @@ assert.ok(about.includes('KONTA — соціальна мережа'),'Public ab
 assert.ok(about.includes('https://konta.pp.ua/about.html'),'About page canonical URL missing');
 assert.ok(robots.includes('Sitemap: https://konta.pp.ua/sitemap.xml'),'robots.txt sitemap pointer missing');
 assert.ok(sitemap.includes('<loc>https://konta.pp.ua/</loc>')&&sitemap.includes('<loc>https://konta.pp.ua/about.html</loc>'),'Sitemap missing public pages');
-assert.ok(!sitemap.includes('http://')&&!sitemap.includes('www.konta.pp.ua'),'Sitemap includes non-canonical URLs');
+assert.ok(!/<loc>http:\/\//.test(sitemap)&&!/<loc>https:\/\/www\.konta\.pp\.ua/.test(sitemap),'Sitemap includes non-canonical URLs');
 
 
 for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','konta-enhancements.css?v=2','app.js?v=12','media.js?v=9','classic.js?v=9']){
