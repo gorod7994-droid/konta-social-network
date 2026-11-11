@@ -8,8 +8,9 @@ const media=fs.readFileSync('media.js','utf8');
 const classic=fs.readFileSync('classic.js','utf8');
 const css=fs.readFileSync('classic.css','utf8');
 const modern=fs.readFileSync('modern.css','utf8');
+const searchCSS=fs.readFileSync('search-actions.css','utf8');
 
-for(const file of ['styles.css?v=8','classic.css?v=8','modern.css?v=8','app.js?v=8','media.js?v=8','classic.js?v=8']){
+for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=9','app.js?v=9','media.js?v=9','classic.js?v=9']){
  assert.ok(html.includes(file),'Missing asset: '+file);
 }
 for(const section of ['photos','videos','music','bookmarks','settings']){
@@ -23,6 +24,16 @@ assert.ok(modern.includes('html[data-theme="dark"]'),'Modern dark styles missing
 assert.ok(modern.includes('@media (max-width:720px)'),'Mobile styles missing');
 assert.ok(modern.includes('prefers-reduced-motion'),'Reduced-motion styles missing');
 assert.ok(html.includes('class="header-create"'),'Quick create button missing');
+assert.ok(html.includes('id="topSearchResults"'),'Instant search dropdown missing');
+assert.ok(html.includes('aria-label="Пошук людей за іменем або ніком"'),'Accessible search missing');
+assert.equal(searchCSS.split('{').length,searchCSS.split('}').length,'Search CSS braces mismatch');
+assert.ok(searchCSS.includes('html[data-theme="dark"]'),'Missing dark-mode search styles');
+assert.ok(app.includes(".ilike('username'"),'Username server search missing');
+assert.ok(app.includes(".ilike('display_name'"),'Display-name server search missing');
+assert.ok(app.includes("case 'post-like':await togglePostLike(id);break;"),'Post reactions still repaint whole page');
+assert.ok(app.includes("case 'comment-like':await toggleCommentLike(id);break;"),'Comment reactions still repaint whole page');
+assert.ok(app.includes("showApp(changed)"),'Refresh-diff rendering missing');
+assert.ok(!classic.includes('window.render();'),'Settings still re-render the whole page');
 
 const context=vm.createContext({
  window:{innerWidth:1200},
@@ -47,6 +58,12 @@ vm.runInContext([
 "state.chatId=state.profiles[1].id;"
 ].join('\n'),context);
 
+assert.equal(vm.runInContext("cleanPeopleQuery('  @USER_TWO  ')",context),'user_two');
+assert.equal(vm.runInContext("matchPeople('@user_two').length",context),1,'Nick search did not find a person');
+assert.equal(vm.runInContext("matchPeople('Друг').length",context),1,'Name search did not find a person');
+assert.equal(vm.runInContext("matchPeople('NoSuchPerson').length",context),0,'Search ignored the query');
+const peopleHtml=vm.runInContext("searchResultsHtml('@user_two')",context);
+assert.ok(peopleHtml.includes('@user_two'),'Search does not show nickname');
 const chats=vm.runInContext('viewMessages()',context);
 for(const action of ['chat-reply','chat-edit','chat-delete','chat-copy']){
  assert.ok(chats.includes('data-action="'+action+'"'),'Missing chat action: '+action);
@@ -73,4 +90,4 @@ vm.runInContext("window.KONTA_CLASSIC.applyPreferences({theme:'dark',density:'co
 assert.equal(context.document.documentElement.dataset.theme,'dark');
 assert.equal(context.document.documentElement.dataset.density,'compact');
 assert.equal(vm.runInContext('state.preferences.enter_to_send',context),false);
-console.log('KONTA 8 modern design smoke tests passed');
+console.log('KONTA 9 people search and smooth UI smoke tests passed');
