@@ -393,9 +393,13 @@ function paintChatWithoutRemount(){
  }
  const currentList=parent.querySelector('.conversation-list'),newList=tmp.querySelector('.conversation-list');
  if(currentList&&newList){
-  currentList.querySelectorAll('.chat-list-item').forEach(n=>n.remove());
+  currentList.querySelectorAll('.chat-list-item,.chat-list-empty').forEach(n=>n.remove());
   const rows=Array.from(newList.querySelectorAll('.chat-list-item'));
-  for(const row of rows)currentList.appendChild(row);
+  if(rows.length){for(const row of rows)currentList.appendChild(row)}
+  else{
+   const empty=newList.querySelector('.chat-list-empty');
+   if(empty)currentList.appendChild(empty);
+  }
   const count=currentList.querySelector('.chat-list-heading span');if(count)count.textContent=String(rows.length);
   const search=currentList.querySelector('#chatSearch');if(search)search.value=currentSearch;
   if(currentSearch){const q=currentSearch.toLocaleLowerCase('uk-UA');rows.forEach(n=>n.hidden=!n.dataset.chatName?.includes(q))}
