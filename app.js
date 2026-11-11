@@ -27,7 +27,7 @@ let lastPresencePing=0;
 async function pingPresence(){if(!state.user||document.visibilityState!=='visible'||Date.now()-lastPresencePing<45000)return;lastPresencePing=Date.now();const now=new Date().toISOString();const {error}=await db.from('profiles').update({last_seen_at:now}).eq('id',me());if(!error){const p=byId(me());if(p)p.last_seen_at=now;if(state.profile)state.profile.last_seen_at=now}}
 setInterval(()=>{pingPresence()},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pingPresence()});
-function verifiedBadge(p){return p?.is_verified?'<span class="konta-verified" title="Офіційний акаунт КОНТА" aria-label="Підтверджений акаунт">✓</span>':''}
+function verifiedBadge(p){return p?.is_verified?'<span class="konta-verified" role="img" title="Офіційний акаунт КОНТА" aria-label="Підтверджений акаунт">✓</span>':''}
 function avatar(p,cls=''){const url=imageSrc(p?.avatar_url);return `<span class="avatar ${cls}">${url?`<img src="${url}" alt="">`:esc(initials(p))}</span>`;}
 function feedback(selector,message,isError=false){const el=$(selector);if(el){el.textContent=message;el.classList.toggle('is-error',isError)}}
 function toast(text){const node=$('#toast');node.textContent=text;node.classList.add('show');clearTimeout(lastToastTimer);lastToastTimer=setTimeout(()=>node.classList.remove('show'),3200)}
@@ -38,7 +38,7 @@ function changeAuthMode(mode){authMode=mode;$$('[data-mode]').forEach(b=>b.class
 function showApp(changed=null){
  if(!state.user)return;
  $('#authScreen').hidden=true;$('#app').hidden=false;
- $('#topMyName').textContent=myName();
+ $('#topMyName').innerHTML=esc(myName())+verifiedBadge(state.profile);
  $('#topAvatar').innerHTML=imageSrc(state.profile?.avatar_url)?`<img src="${imageSrc(state.profile.avatar_url)}" alt="">`:esc(initials(state.profile));
  const mounted=$('#main')?.dataset.renderedView===state.view&&!initialLoadError;
  if(mounted&&Array.isArray(changed)){
