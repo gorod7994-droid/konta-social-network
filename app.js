@@ -215,8 +215,9 @@ function kontaDialog(title){
  const close=document.createElement('button');close.type='button';close.className='konta-ui-close';close.textContent='✕';close.setAttribute('aria-label','Закрити');close.onclick=()=>backdrop.remove();
  heading.append(h,close);dialog.append(heading);backdrop.append(dialog);
  backdrop.addEventListener('click',e=>{if(e.target===backdrop)backdrop.remove()});
- const escape=e=>{if(e.key==='Escape'){backdrop.remove();document.removeEventListener('keydown',escape)}};
- document.addEventListener('keydown',escape,{once:false});
+ const escape=e=>{if(e.key==='Escape')backdrop.remove()};
+ document.addEventListener('keydown',escape);
+ const originalRemove=backdrop.remove.bind(backdrop);backdrop.remove=()=>{document.removeEventListener('keydown',escape);originalRemove()};
  document.body.append(backdrop);close.focus();return {backdrop,dialog};
 }
 function openEmojiGrid(input,chat=false){
