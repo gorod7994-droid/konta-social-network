@@ -24,7 +24,7 @@
 .kp-profile .profile-classic-meta strong{font-weight:550;overflow-wrap:anywhere}
 .kp-profile .profile-classic-actions{display:flex;flex-wrap:wrap;gap:8px}
 .kp-profile .profile-classic-actions .btn{border-radius:11px;min-height:40px;display:inline-flex;align-items:center;justify-content:center}
-.kp-profile .profile-stats{background:#f5f8ff;border:1px solid #e7eefb;border-radius:15px;padding:5px;margin-top:19px;gap:3px}
+.kp-profile .profile-stats{grid-template-columns:repeat(4,minmax(0,1fr));background:#f5f8ff;border:1px solid #e7eefb;border-radius:15px;padding:5px;margin-top:19px;gap:3px}
 .kp-profile .profile-stats button{padding:12px 4px;line-height:1.5;min-width:0}
 .kp-profile .profile-stats button:disabled{opacity:.8;cursor:default}
 .kp-profile .profile-stats b{font-size:21px;font-weight:850}
@@ -116,3 +116,5 @@ html[data-theme="dark"] .kp-notice-item:hover{background:#364e71}
 html[data-theme="dark"] .kp-notice-kind{border-color:#202b3c}
 html[data-theme="dark"] .kp-notice-text strong{color:#ecf3ff}
 html[data-theme="dark"] .bottom-nav button[data-nav="notifications"].has-unread::after{border-color:#202b3c}
+
+@media (max-width:370px){.kp-profile .profile-stats b{font-size:17px}.kp-profile .profile-stats button{font-size:10px;padding:8px 1px}}
