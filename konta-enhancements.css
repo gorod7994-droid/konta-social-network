@@ -155,3 +155,13 @@ html[data-theme="dark"] .konta-verified{background:#3c96ff;color:#fff}
 .konta-online-dot{display:inline-block;width:8px;height:8px;flex:none;border-radius:50%;background:#20c477;box-shadow:0 0 0 2px rgba(32,196,119,.14)}
 .kp-mobile-identity-name .konta-presence{display:flex}
 .profile-classic-name .konta-verified{position:relative;top:-1px}
+
+/* Keep the official badge visible in the fixed header and profile headings. */
+#topMyName .konta-verified,.profile-classic-name .konta-verified,.kp-mobile-identity-name .konta-verified,.classic-page-heading .konta-verified{
+ display:inline-grid!important;place-items:center!important;
+ background:#2587ef!important;color:#fff!important;
+ border-radius:50%!important;width:19px!important;height:19px!important;
+ font-size:13px!important;font-weight:900!important;line-height:1!important;
+ margin-left:6px!important;vertical-align:middle!important;
+ opacity:1!important;visibility:visible!important;flex:none!important;
+}
