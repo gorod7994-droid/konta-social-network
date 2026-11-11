@@ -10,7 +10,7 @@ const css=fs.readFileSync('classic.css','utf8');
 const modern=fs.readFileSync('modern.css','utf8');
 const searchCSS=fs.readFileSync('search-actions.css','utf8');
 
-for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','konta-enhancements.css?v=1','app.js?v=11','media.js?v=9','classic.js?v=9']){
+for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','konta-enhancements.css?v=2','app.js?v=12','media.js?v=9','classic.js?v=9']){
  assert.ok(html.includes(file),'Missing asset: '+file);
 }
 for(const section of ['photos','videos','music','bookmarks','settings']){
@@ -76,7 +76,7 @@ assert.ok(chats.includes('&lt;script&gt;'),'Escaped message missing');
 const profile=vm.runInContext('viewProfile()',context);
 assert.ok(profile.includes('profile-classic'),'Missing classic profile');
 assert.ok(profile.includes('Стіна'),'Missing profile wall');
-assert.ok(profile.includes('kp-cover'),'Profile cover missing');
+assert.ok(!profile.includes('kp-cover'),'Old profile banner still present');
 assert.ok(profile.includes('підписників'),'Follower count missing');
 vm.runInContext("state.profileId=state.profiles[1].id;",context);
 const otherProfile=vm.runInContext('viewProfile()',context);
