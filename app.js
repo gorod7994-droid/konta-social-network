@@ -27,9 +27,33 @@ function setBusy(selector,busy){const node=$(selector);if(node)node.disabled=bus
 function errText(error){const msg=error?.message||String(error||'Невідома помилка');if(/Invalid login credentials/i.test(msg))return 'Неправильний email або пароль.';if(/Email not confirmed/i.test(msg))return 'Спочатку підтверди email за посиланням у пошті.';if(/User already registered/i.test(msg))return 'Цей email уже зареєстрований.';if(/Password should be at least/i.test(msg))return 'Пароль занадто короткий.';if(/Failed to fetch|NetworkError|fetch failed/i.test(msg))return 'Немає з’єднання. Перевір інтернет і онови сторінку.';if(/duplicate key|unique constraint/i.test(msg))return 'Це ім’я користувача вже зайняте.';if(/relation .* does not exist|schema cache|Could not find the table/i.test(msg))return 'Потрібно один раз запустити SETUP_SUPABASE.sql у Supabase → SQL Editor.';return msg}
 function showAuth(){state.user=null;state.profile=null;state.prefsAppliedForUser=null;state.chatReplyId=null;state.chatEditId=null;$('#app').hidden=true;$('#authScreen').hidden=false;if(liveChannel&&db){db.removeChannel(liveChannel);liveChannel=null}clearInterval(pollId);pollId=null;}
 function changeAuthMode(mode){authMode=mode;$$('[data-mode]').forEach(b=>b.classList.toggle('is-active',b.dataset.mode===mode));$('#authNameRow').hidden=mode!=='signup';$('#authName').required=mode==='signup';$('#authPasswordRow').hidden=mode==='reset';$('#authPassword').required=mode!=='reset';$('#forgotBtn').textContent=mode==='reset'?'Повернутися до входу':'Забув пароль?';$('#authHeading').textContent=mode==='signup'?'Створи свою сторінку':mode==='reset'?'Відновити пароль':'З поверненням!';$('#authHint').textContent=mode==='signup'?'Реєстрація безкоштовна.':'Вкажи пошту — надішлемо посилання для відновлення.';if(mode==='login')$('#authHint').textContent='Увійди, щоб побачити новини друзів.';$('#authSubmit').textContent=mode==='signup'?'Зареєструватися':mode==='reset'?'Надіслати лист':'Увійти';$('#authPassword').autocomplete=mode==='signup'?'new-password':'current-password';feedback('#authFeedback','');}
-function showApp(){if(!state.user)return;$('#authScreen').hidden=true;$('#app').hidden=false;$('#topMyName').textContent=myName();$('#topAvatar').innerHTML=imageSrc(state.profile?.avatar_url)?`<img src="${imageSrc(state.profile.avatar_url)}" alt="">`:esc(initials(state.profile));render();}
+function showApp(changed=null){
+ if(!state.user)return;
+ $('#authScreen').hidden=true;$('#app').hidden=false;
+ $('#topMyName').textContent=myName();
+ $('#topAvatar').innerHTML=imageSrc(state.profile?.avatar_url)?`<img src="${imageSrc(state.profile.avatar_url)}" alt="">`:esc(initials(state.profile));
+ const mounted=$('#main')?.dataset.renderedView===state.view&&!initialLoadError;
+ if(mounted&&Array.isArray(changed)){
+  const lightweight=['likes','commentLikes','messages','notifications','preferences'];
+  if(changed.every(name=>lightweight.includes(name))){
+   if(changed.includes('likes')||changed.includes('commentLikes'))paintAllReactions();
+   if(changed.includes('messages'))paintChatWithoutRemount();
+   if(changed.includes('notifications')&&state.view==='notifications')$('#main').innerHTML=viewNotifications();
+   renderSuggestions();
+   return;
+  }
+  if(changed.every(name=>lightweight.includes(name)||name==='comments')){
+   document.querySelectorAll('.post[id^="post-"]').forEach(el=>paintPostComments(el.id.slice(5)));
+   paintAllReactions();
+   if(changed.includes('messages'))paintChatWithoutRemount();
+   renderSuggestions();
+   return;
+  }
+ }
+ render();
+}
 function setupError(){return `<div class="panel"><div class="panel-header"><h2>Потрібно налаштувати базу даних</h2></div><div class="panel-inner"><div class="error-box">${esc(initialLoadError||'Не вдалося завантажити дані Supabase.')}</div><p>Відкрий <b>Supabase → SQL Editor → New query</b>, встав увесь файл <b>SETUP_SUPABASE.sql</b>, натисни <b>Run</b>.</p><p>Потім повернися сюди й онови сторінку.</p><button class="btn primary" data-action="reload">Повторити завантаження</button></div></div>`}
-async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refreshInFlight=true;try{
+async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refreshInFlight=true;let changed=null;try{
   const id=me();
   const queries = [
     ['profiles', db.from('profiles').select('*').limit(500)],
@@ -48,11 +72,16 @@ async function loadAll(quiet=false){if(!state.user||refreshInFlight)return;refre
   ];
   const results=await Promise.all(queries.map(async ([name,query])=>{const {data,error}=await query;if(error)throw new Error(`${name}: ${errText(error)}`);return [name,name==='preferences'?(data||null):(data||[])]}));
   if(id!==me())return;
+  changed=results.filter(([name,data])=>JSON.stringify(state[name])!==JSON.stringify(data)).map(([name])=>name);
   for(const [name,data] of results)state[name]=data;
+  if(state.searchRemoteMatches?.length){
+   const known=new Set(state.profiles.map(p=>p.id));
+   for(const p of state.searchRemoteMatches)if(!known.has(p.id)){state.profiles.push(p);known.add(p.id)}
+  }
   if(window.KONTA_CLASSIC){state.preferences=window.KONTA_CLASSIC.applyPreferences(state.preferences);if(state.prefsAppliedForUser!==id){state.feedFilter=state.preferences.feed_default;state.prefsAppliedForUser=id;}}
   state.profile=byId(id);initialLoadError=state.profile?null:'Профіль не знайдено. Запусти SETUP_SUPABASE.sql у SQL Editor.';
   if(!quiet)toast('Дані оновлено');
- }catch(error){initialLoadError=errText(error);if(!quiet)toast(initialLoadError)}finally{refreshInFlight=false;showApp()}}
+ }catch(error){initialLoadError=errText(error);if(!quiet)toast(initialLoadError)}finally{refreshInFlight=false;showApp(changed)}}
 async function signedIn(user){if(!user)return;if(state.user?.id===user.id&&authBoot)return;state.user=user;authBoot=true;$('#authScreen').hidden=true;$('#app').hidden=false;$('#main').innerHTML='<div class="loading-card">Завантажуємо твою сторінку…</div>';await loadAll(true);subscribeLive();const linkedPost=new URLSearchParams(location.hash.slice(1)).get('post');if(idOK(linkedPost)){const linked=state.posts.find(p=>p.id===linkedPost);if(linked){if(linked.community_id)go('group',{groupId:linked.community_id});else go('feed');setTimeout(()=>$('#post-'+linkedPost)?.scrollIntoView({block:'center'}),150)}}if(!pollId)pollId=setInterval(()=>{if(document.visibilityState==='visible'&&state.user)loadAll(true)},25000);}
 function subscribeLive(){if(!db||!state.user)return;if(liveChannel)db.removeChannel(liveChannel);liveChannel=db.channel(`konta-${me()}`)
   .on('postgres_changes',{event:'*',schema:'public',table:'private_messages'},()=>scheduleReload())
@@ -245,7 +274,7 @@ function viewMessages(){
 function viewBookmarks(){const liked=state.posts.filter(p=>state.likes.some(l=>l.user_id===me()&&l.post_id===p.id));return `<h1 class="page-title">Мої закладки</h1><div class="panel">${header('Вподобані записи')}</div>${liked.length?liked.map(postCard).join(''):empty('Закладок поки немає','Постав ♥ на допис — і він з’явиться тут.','☆')}`}
 function viewSettings(){return window.KONTA_CLASSIC?.renderSettings()||empty('Налаштування','Завантаження інтерфейсу...')}
 function viewNotifications(){const notices=state.notifications;const labels={friend:'надіслав(-ла) заявку в друзі',like:'вподобав(-ла) твій допис',comment:'прокоментував(-ла) твій допис',message:'написав(-ла) тобі повідомлення'};return `<h1 class="page-title">Сповіщення</h1><div class="panel">${header('Нові події','<button class="btn soft small" data-action="notice-read">Позначити прочитаними</button>')} ${notices.length?notices.map(n=>`<div class="notice ${n.is_read?'':'is-unread'}">${avatar(byId(n.actor_id),'sm')}<div class="notice-body"><a href="#" data-action="profile-open" data-id="${esc(n.actor_id)}">${esc(byId(n.actor_id)?.display_name||'Користувач')}</a> ${esc(labels[n.kind]||'є новина для тебе')}<small>${esc(fmtTime(n.created_at))}</small></div></div>`).join(''):'<div class="empty">Сповіщень поки немає</div>'}</div>`}
-function render(){if(!state.user)return;$$('[data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));renderSuggestions();const views={feed:viewFeed,profile:viewProfile,friends:viewFriends,explore:viewExplore,photos:viewPhotos,videos:viewVideos,music:viewMusic,settings:viewSettings,bookmarks:viewBookmarks,groups:viewGroups,group:viewGroup,messages:viewMessages,notifications:viewNotifications};$('#main').innerHTML=initialLoadError?setupError():(views[state.view]||viewFeed)();if(state.view==='messages'){$('#messageScroll')?.scrollTo(0,999999)} }
+function render(){if(!state.user)return;$$('[data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('is-active',n.dataset.nav===state.view));renderSuggestions();const views={feed:viewFeed,profile:viewProfile,friends:viewFriends,explore:viewExplore,photos:viewPhotos,videos:viewVideos,music:viewMusic,settings:viewSettings,bookmarks:viewBookmarks,groups:viewGroups,group:viewGroup,messages:viewMessages,notifications:viewNotifications};$('#main').innerHTML=initialLoadError?setupError():(views[state.view]||viewFeed)();$('#main').dataset.renderedView=state.view;if(state.view==='messages'){$('#messageScroll')?.scrollTo(0,999999)} }
 function go(view,opts={}){state.view=view;if('userId'in opts)state.profileId=opts.userId;if('chatId'in opts)state.chatId=opts.chatId;if('groupId'in opts)state.groupId=opts.groupId;if('search'in opts){state.search=opts.search;if(view==='explore')schedulePeopleSearch(state.search)}render();if(window.innerWidth<720)window.scrollTo({top:0,behavior:'smooth'})}
 function openPost(groupId=null){state.postGroupId=groupId;$('#postText').value='';$('#postFile').value='';$('#postFileLabel').textContent='До 8 МБ';$('#postPreview').hidden=true;feedback('#postFeedback','');$('#postDialog').showModal()}
 function openProfileEditor(){const p=state.profile;if(!p)return;$('#profileName').value=p.display_name;$('#profileUsername').value=p.username;$('#profileBio').value=p.bio||'';$('#avatarFile').value='';feedback('#profileFeedback','');$('#profileDialog').showModal()}
@@ -385,7 +414,7 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'group-open':if(idOK(id))go('group',{groupId:id});break;
  case 'group-create':$('#groupName').value='';$('#groupDescription').value='';feedback('#groupFeedback','');$('#groupDialog').showModal();break;
  case 'feed-tab':state.feedFilter=id;render();break;
- case 'friends-tab':state.friendsTab=id;render();break;
+ case 'friends-tab':state.friendsTab=id;render();if(id==='people'&&state.friendSearch)schedulePeopleSearch(state.friendSearch);break;
  case 'comment-focus':$('#post-'+id+' .comment-form input')?.focus();break;
  case 'comment-expand':{if(expandedComments.has(id))expandedComments.delete(id);else expandedComments.add(id);paintPostComments(id);break}
  case 'comment-reply':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;expandedComments.add(comment.post_id);paintPostComments(comment.post_id);const form=$(`#post-${comment.post_id} .comment-form`);if(!form)break;form.dataset.parentId=id;$('.reply-banner',form).hidden=false;$('.reply-caption',form).textContent=`Відповідь для ${byId(comment.user_id)?.display_name||'користувача'}`;const input=$('[name="comment"]',form);input.placeholder='Напишіть відповідь...';input.focus();break}
@@ -447,7 +476,7 @@ async function sendMessage(form){
    ({error}=await db.from('private_messages').insert({sender_id:me(),recipient_id:currentChat,body,reply_to:parent?.id||null}));
   }
   if(error)throw error;
-  messageDrafts.delete(currentChat);state.chatReplyId=null;state.chatEditId=null;
+  messageDrafts.delete(currentChat);state.chatReplyId=null;state.chatEditId=null;input.value='';
   await afterChange(editing?'Повідомлення змінено':null);
  }catch(error){toast(errText(error));btn.disabled=false}
 }
@@ -466,16 +495,30 @@ function wireEvents(){
  const signOut=async()=>{document.querySelector('.mobile-more')?.removeAttribute('open');const {error}=await db.auth.signOut();if(error)toast(errText(error));else{authBoot=false;showAuth();toast('Ти вийшов(-ла) з акаунта')}};
  $('#logoutBtn').addEventListener('click',signOut);
  $('#mobileLogoutBtn').addEventListener('click',signOut);
- $('#topSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){go('explore',{search:e.target.value.trim()})}});
- document.addEventListener('input',event=>{if(event.target.id==='exploreInput'){state.search=event.target.value;$('#searchResults').innerHTML=searchResultsHtml(state.search)}if(event.target.matches('#messageForm textarea[name="body"]')&&state.chatId)messageDrafts.set(state.chatId,event.target.value);if(event.target.id==='chatSearch'){const q=event.target.value.trim().toLowerCase();$('.chat-list-item').forEach(n=>n.hidden=!n.dataset.chatName?.includes(q))}});
+ $('#topSearch').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();const dropdown=$('#topSearchResults');if(dropdown)dropdown.hidden=true;go('explore',{search:e.target.value.trim()});}
+  else if(e.key==='Escape'){const dropdown=$('#topSearchResults');if(dropdown)dropdown.hidden=true;e.target.blur();}
+ });
+ $('#topSearch').addEventListener('input',e=>schedulePeopleSearch(e.target.value));
+ $('#topSearch').addEventListener('focus',()=>repaintPeopleResults());
+ document.addEventListener('input',event=>{if(event.target.id==='exploreInput'){state.search=event.target.value;schedulePeopleSearch(state.search)}if(event.target.matches('#messageForm textarea[name="body"]')&&state.chatId)messageDrafts.set(state.chatId,event.target.value);if(event.target.id==='chatSearch'){const q=event.target.value.trim().toLocaleLowerCase('uk-UA');$('.chat-list-item').forEach(n=>n.hidden=!n.dataset.chatName?.includes(q))}if(event.target.id==='friendsSearchInput'){state.friendSearch=event.target.value;schedulePeopleSearch(state.friendSearch)}});
  document.addEventListener('submit',e=>{if(e.target.matches('.comment-form')){e.preventDefault();submitComment(e.target)}else if(e.target.id==='messageForm'){e.preventDefault();sendMessage(e.target)}});
  document.addEventListener('keydown',e=>{if(e.target.matches('#messageForm textarea[name="body"]')&&e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&(state.preferences?.enter_to_send!==false||e.ctrlKey||e.metaKey)){e.preventDefault();e.target.closest('form')?.requestSubmit()}});
  document.addEventListener('click',e=>{
   const closer=e.target.closest('[data-close]');if(closer){document.getElementById(closer.dataset.close)?.close();return}
-  const nav=e.target.closest('[data-nav]');if(nav){e.preventDefault();document.querySelector('.mobile-more')?.removeAttribute('open');const view=nav.dataset.nav;if(view==='messages'){state.chatReplyId=null;state.chatEditId=null;if(window.innerWidth<=720)state.chatId=null;}go(view,view==='profile'?{userId:me()}:{}) ;return}
-  const act=e.target.closest('[data-action]');if(act){e.preventDefault();performAction(act.dataset.action,act.dataset.id,act);return}
+  const nav=e.target.closest('[data-nav]');if(nav){
+   e.preventDefault();
+   document.querySelector('.mobile-more')?.removeAttribute('open');
+   const view=nav.dataset.nav;
+   const dropdown=$('#topSearchResults');if(dropdown)dropdown.hidden=true;
+   if(view==='messages'){state.chatReplyId=null;state.chatEditId=null;if(window.innerWidth<=720)state.chatId=null;}
+   const options=view==='profile'?{userId:me()}:view==='explore'?{search:nav.closest('#topSearchResults')?$('#topSearch').value.trim():state.search}:{};
+   go(view,options);
+   return;
+  }
+  const act=e.target.closest('[data-action]');if(act){e.preventDefault();const dropdown=$('#topSearchResults');if(dropdown)dropdown.hidden=true;performAction(act.dataset.action,act.dataset.id,act);return}
  });
- document.addEventListener('pointerdown',e=>{const m=document.querySelector('.mobile-more');if(m?.open&&!m.contains(e.target))m.removeAttribute('open')});
+ document.addEventListener('pointerdown',e=>{const m=document.querySelector('.mobile-more');if(m?.open&&!m.contains(e.target))m.removeAttribute('open');const dropdown=$('#topSearchResults');if(dropdown&&!e.target.closest('.top-search'))dropdown.hidden=true});
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.user)loadAll(true)});
  window.addEventListener('focus',()=>{if(state.user)loadAll(true)});
 }
