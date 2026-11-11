@@ -27,7 +27,7 @@ jobs:
           modern=Path("modern.css").read_text(encoding="utf-8")
           search=Path("search-actions.css").read_text(encoding="utf-8")
           cfg=Path("config.js").read_text(encoding="utf-8")
-          for filename in ["app.js?v=9","media.js?v=9","styles.css?v=9","classic.js?v=9","classic.css?v=9","modern.css?v=9","search-actions.css?v=9"]:
+          for filename in ["app.js?v=10","media.js?v=9","styles.css?v=9","classic.js?v=9","classic.css?v=9","modern.css?v=9","search-actions.css?v=10"]:
               assert filename in html, f"Missing asset {filename}"
           for item in ["mediaUploadDialog","mediaAlbumDialog","mediaUploadForm","mediaAlbumForm"]:
               assert f'id="{item}"' in html, f"Missing element {item}"
@@ -40,5 +40,5 @@ jobs:
           assert search.count("{")==search.count("}"), "Unbalanced people-search CSS rules"
           assert "id=\"topSearchResults\"" in html, "Instant search missing"
           assert "html[data-theme=\"dark\"]" in modern, "Dark theme CSS missing"
-          print("KONTA 9 search and smooth UI verified")
+          print("KONTA comment edit/moderation and smooth UI verified")
           PY
