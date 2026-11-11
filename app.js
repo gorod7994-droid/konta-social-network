@@ -403,6 +403,50 @@ function paintChatWithoutRemount(){
  if(preservedInput&&document.contains(preservedInput))preservedInput.value=currentDraft;
 }
 
+
+async function refreshFriendshipUI(){
+ const id=me();
+ const {data,error}=await db.from('friendships').select('*').or('requester_id.eq.'+id+',addressee_id.eq.'+id).limit(1000);
+ if(error)throw error;
+ state.friends=data||[];
+ renderSuggestions();
+ if(state.view==='friends'){
+  const tmp=document.createElement('div');tmp.innerHTML=viewFriends();
+  const current=$('#main .person-list'),updated=tmp.querySelector('.person-list');
+  if(current&&updated)current.innerHTML=updated.innerHTML;
+  const tabsCurrent=$('#main .feed-tabs button'),tabsNew=Array.from(tmp.querySelectorAll('.feed-tabs button'));
+  tabsCurrent.forEach((button,i)=>{if(tabsNew[i])button.innerHTML=tabsNew[i].innerHTML});
+ }else if(state.view==='explore'){
+  const area=$('#searchResults');
+  if(area)area.innerHTML=searchResultsHtml(state.search);
+ }else if(state.view==='profile'&&(state.profileId||me())!==me()){
+  const id=state.profileId;
+  const actions=$('#main .profile-classic-actions');
+  if(actions)actions.innerHTML=friendAction(id)+' <button class="btn primary small" data-action="chat-open" data-id="'+esc(id)+'">Написати повідомлення</button>';
+ }
+}
+async function refreshMembershipUI(){
+ const {data,error}=await db.from('community_members').select('*').limit(3000);
+ if(error)throw error;
+ state.members=data||[];
+ if(state.view==='group'){
+  const tmp=document.createElement('div');tmp.innerHTML=viewGroup();
+  const main=$('#main');
+  const oldHead=main?.querySelector('.panel'),freshHead=tmp.querySelector('.panel');
+  if(oldHead&&freshHead)oldHead.replaceWith(freshHead);
+  const oldComposer=main?.querySelector('.composer-teaser'),freshComposer=tmp.querySelector('.composer-teaser');
+  if(oldComposer&&!freshComposer)oldComposer.remove();
+  else if(!oldComposer&&freshComposer&&freshHead)freshHead.after(freshComposer);
+ }
+ if(state.view==='groups'){
+  const panel=$('#main .panel');
+  const tmp=document.createElement('div');tmp.innerHTML=viewGroups();
+  const fresh=tmp.querySelector('.panel');
+  if(panel&&fresh)panel.innerHTML=fresh.innerHTML;
+ }
+ renderSuggestions();
+}
+
 async function performAction(action,id,node){if(!state.user&&!['reload'].includes(action))return;try{
  switch(action){
  case 'reload':initialLoadError=null;await loadAll(true);break;
@@ -438,12 +482,12 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'post-like':await togglePostLike(id);break;
  case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;state.posts=state.posts.filter(x=>x.id!==id);document.getElementById('post-'+id)?.remove();toast('Допис видалено');break}
  case 'comment-delete':{const c=state.comments.find(c=>c.id===id);if(!c||c.user_id!==me())break;const {error}=await db.from('comments').delete().eq('id',id).eq('user_id',me());if(error)throw error;await reloadCommentsForPost(c.post_id);break}
- case 'friend-add':{if(id===me()||!idOK(id))break;const {error}=await db.from('friendships').insert({requester_id:me(),addressee_id:id,status:'pending'});if(error)throw error;await afterChange('Запит у друзі надіслано!');break}
- case 'friend-accept':{const rec=friendRecord(id);if(!rec||rec.addressee_id!==me())break;const {error}=await db.from('friendships').update({status:'accepted'}).eq('id',rec.id).eq('addressee_id',me());if(error)throw error;await afterChange('Тепер ви друзі!');break}
- case 'friend-remove':{const rec=friendRecord(id);if(!rec)break;const {error}=await db.from('friendships').delete().eq('id',rec.id);if(error)throw error;await afterChange(rec.status==='accepted'?'Видалено з друзів':'Заявку скасовано');break}
- case 'group-join':{if(!idOK(id))break;const {error}=await db.from('community_members').insert({community_id:id,user_id:me()});if(error)throw error;await afterChange('Ти вступив(-ла) у спільноту!');break}
- case 'group-leave':{if(!idOK(id))break;const {error}=await db.from('community_members').delete().eq('community_id',id).eq('user_id',me());if(error)throw error;await afterChange('Ти вийшов(-ла) зі спільноти');break}
- case 'notice-read':{const {error}=await db.from('notifications').update({is_read:true}).eq('target_id',me()).eq('is_read',false);if(error)throw error;await afterChange('Сповіщення прочитано');break}
+ case 'friend-add':{if(id===me()||!idOK(id))break;const {error}=await db.from('friendships').insert({requester_id:me(),addressee_id:id,status:'pending'});if(error)throw error;await refreshFriendshipUI();toast('Запит у друзі надіслано!');break}
+ case 'friend-accept':{const rec=friendRecord(id);if(!rec||rec.addressee_id!==me())break;const {error}=await db.from('friendships').update({status:'accepted'}).eq('id',rec.id).eq('addressee_id',me());if(error)throw error;await refreshFriendshipUI();toast('Тепер ви друзі!');break}
+ case 'friend-remove':{const rec=friendRecord(id);if(!rec)break;const {error}=await db.from('friendships').delete().eq('id',rec.id);if(error)throw error;await refreshFriendshipUI();toast(rec.status==='accepted'?'Видалено з друзів':'Заявку скасовано');break}
+ case 'group-join':{if(!idOK(id))break;const {error}=await db.from('community_members').insert({community_id:id,user_id:me()});if(error)throw error;await refreshMembershipUI();toast('Ти вступив(-ла) у спільноту!');break}
+ case 'group-leave':{if(!idOK(id))break;const {error}=await db.from('community_members').delete().eq('community_id',id).eq('user_id',me());if(error)throw error;await refreshMembershipUI();toast('Ти вийшов(-ла) зі спільноти');break}
+ case 'notice-read':{const {error}=await db.from('notifications').update({is_read:true}).eq('target_id',me()).eq('is_read',false);if(error)throw error;state.notifications=state.notifications.map(n=>({...n,is_read:true}));document.querySelectorAll('.notice.is-unread').forEach(n=>n.classList.remove('is-unread'));const dot=$('#noticeDot');if(dot)dot.hidden=true;toast('Сповіщення прочитано');break}
  default:if(action.startsWith('media-')&&window.KONTA_MEDIA)await window.KONTA_MEDIA.action(action,id);else if(action.startsWith('classic-')&&window.KONTA_CLASSIC)await window.KONTA_CLASSIC.action(action,id,node);break;
  }}catch(error){toast(errText(error))}}
 async function submitComment(form){
