@@ -10,7 +10,7 @@ const css=fs.readFileSync('classic.css','utf8');
 const modern=fs.readFileSync('modern.css','utf8');
 const searchCSS=fs.readFileSync('search-actions.css','utf8');
 
-for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=9','app.js?v=9','media.js?v=9','classic.js?v=9']){
+for(const file of ['styles.css?v=9','classic.css?v=9','modern.css?v=9','search-actions.css?v=10','app.js?v=10','media.js?v=9','classic.js?v=9']){
  assert.ok(html.includes(file),'Missing asset: '+file);
 }
 for(const section of ['photos','videos','music','bookmarks','settings']){
@@ -90,4 +90,33 @@ vm.runInContext("window.KONTA_CLASSIC.applyPreferences({theme:'dark',density:'co
 assert.equal(context.document.documentElement.dataset.theme,'dark');
 assert.equal(context.document.documentElement.dataset.density,'compact');
 assert.equal(vm.runInContext('state.preferences.enter_to_send',context),false);
-console.log('KONTA 9 people search and smooth UI smoke tests passed');
+
+assert.ok(searchCSS.includes('.comment-edit-form'),'Inline edit form CSS missing');
+assert.ok(app.includes("case 'comment-edit-open':openCommentEditor(id);break;"),'Edit action missing');
+assert.ok(app.includes("case 'comment-delete':{"),'Delete action missing');
+assert.ok(app.includes(".update({body,edited_at:new Date().toISOString()})"),'Edited body is not saved');
+assert.ok(app.includes(".delete().eq('id',id).select('id').maybeSingle()"),'Delete did not verify affected row');
+
+// Verify permissions shown to comment authors, the owner of a post, and bystanders.
+vm.runInContext([
+"state.commentLikes=[];",
+"state.posts.push({id:'ffffffff-ffff-4fff-ffff-ffffffffffff',user_id:state.profiles[1].id,body:'Другий допис',created_at:'2026-11-03T10:00:00Z'});",
+"state.comments=[",
+" {id:'10101010-1010-4010-8010-101010101010',post_id:state.posts[0].id,user_id:state.user.id,body:'Мій коментар',created_at:'2026-11-04T10:00:00Z'},",
+" {id:'20202020-2020-4020-8020-202020202020',post_id:state.posts[0].id,user_id:state.profiles[1].id,body:'Чужий коментар',created_at:'2026-11-04T10:01:00Z'},",
+" {id:'30303030-3030-4030-8030-303030303030',post_id:state.posts[1].id,user_id:state.profiles[1].id,body:'<script>alert(1)</script>',created_at:'2026-11-04T10:02:00Z'}",
+"];"
+].join('\n'),context);
+const mine=vm.runInContext('renderCommentNode(state.comments[0],new Map())',context);
+const onMyPost=vm.runInContext('renderCommentNode(state.comments[1],new Map())',context);
+const onOtherPost=vm.runInContext('renderCommentNode(state.comments[2],new Map())',context);
+assert.ok(mine.includes('data-action="comment-edit-open"'),'Author cannot edit own comment');
+assert.ok(mine.includes('data-action="comment-delete"'),'Author cannot delete own comment');
+assert.ok(onMyPost.includes('data-action="comment-delete"'),'Post owner cannot moderate a comment');
+assert.ok(!onMyPost.includes('data-action="comment-edit-open"'),'Post owner can edit another author');
+assert.ok(!onOtherPost.includes('data-action="comment-delete"'),'Bystander can delete another comment');
+assert.ok(!onOtherPost.includes('data-action="comment-edit-open"'),'Bystander can edit another comment');
+assert.ok(!onOtherPost.includes('<script>'),'Unescaped HTML in comment');
+assert.ok(onOtherPost.includes('&lt;script&gt;'),'Comment escaping missing');
+
+console.log('KONTA comment editing and moderation smoke tests passed');
