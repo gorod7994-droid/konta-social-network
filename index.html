@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#3267e7"><meta name="description" content="KONTA — місце, де зустрічаються твої люди. Соціальна мережа для друзів та спілкування.">
 <title>KONTA — друзі, новини та повідомлення</title>
 <script>(function(){try{var t=localStorage.getItem("konta_theme")||"light",d=localStorage.getItem("konta_density")||"regular";document.documentElement.dataset.theme=t==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;document.documentElement.dataset.density=d;}catch(e){}})();</script>
-<link rel="icon" href="assets/icon-192.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=8"><link rel="stylesheet" href="classic.css?v=8"><link rel="stylesheet" href="modern.css?v=8">
+<link rel="icon" href="assets/icon-192.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=9"><link rel="stylesheet" href="classic.css?v=9"><link rel="stylesheet" href="modern.css?v=9"><link rel="stylesheet" href="search-actions.css?v=9">
 </head>
 <body>
 <section id="authScreen" class="auth-screen">
@@ -31,7 +31,7 @@
 </section>
 
 <div id="app" hidden>
-  <header class="site-top"><div class="container top-inner"><button class="top-logo" data-nav="feed"><span class="logo-icon">К</span><b>KONTA</b></button><details class="mobile-more"><summary aria-label="Відкрити меню KONTA" title="Меню">☰</summary><div class="mobile-more-panel" aria-label="Розділи KONTA"><button type="button" data-nav="groups">◎ Спільноти</button><button type="button" data-nav="photos">▧ Фотографії</button><button type="button" data-nav="videos">▷ Відео</button><button type="button" data-nav="music">♫ Музика</button><button type="button" data-nav="explore">⌕ Пошук</button><button type="button" data-nav="notifications">♢ Сповіщення</button><button type="button" data-nav="bookmarks">☆ Закладки</button><button type="button" data-nav="settings">⚙ Налаштування</button><hr><button type="button" id="mobileSettingsBtn">⚙ Редагувати профіль</button><button type="button" id="mobileLogoutBtn">⇥ Вийти з акаунта</button></div></details><label class="top-search"><span>⌕</span><input id="topSearch" placeholder="Пошук людей і дописів..." autocomplete="off"></label><div class="top-actions"><button class="top-icon" data-nav="notifications" title="Сповіщення">♧<i id="noticeDot" hidden></i></button><button class="top-icon" data-nav="messages" title="Повідомлення">✉</button><button class="header-create" type="button" data-action="post-open" title="Написати допис"><span>＋</span> Новий допис</button><button class="top-me" data-nav="profile"><span id="topMyName">Мій профіль</span><span class="top-avatar" id="topAvatar">К</span>⌄</button></div></div></header>
+  <header class="site-top"><div class="container top-inner"><button class="top-logo" data-nav="feed"><span class="logo-icon">К</span><b>KONTA</b></button><details class="mobile-more"><summary aria-label="Відкрити меню KONTA" title="Меню">☰</summary><div class="mobile-more-panel" aria-label="Розділи KONTA"><button type="button" data-nav="groups">◎ Спільноти</button><button type="button" data-nav="photos">▧ Фотографії</button><button type="button" data-nav="videos">▷ Відео</button><button type="button" data-nav="music">♫ Музика</button><button type="button" data-nav="explore">⌕ Пошук</button><button type="button" data-nav="notifications">♢ Сповіщення</button><button type="button" data-nav="bookmarks">☆ Закладки</button><button type="button" data-nav="settings">⚙ Налаштування</button><hr><button type="button" id="mobileSettingsBtn">⚙ Редагувати профіль</button><button type="button" id="mobileLogoutBtn">⇥ Вийти з акаунта</button></div></details><div class="top-search"><span>⌕</span><input id="topSearch" type="search" placeholder="Ім’я або @нік людини..." autocomplete="off" aria-label="Пошук людей за іменем або ніком" aria-controls="topSearchResults"><div id="topSearchResults" class="instant-search" aria-label="Результати пошуку людей" hidden></div></div><div class="top-actions"><button class="top-icon" data-nav="notifications" title="Сповіщення">♧<i id="noticeDot" hidden></i></button><button class="top-icon" data-nav="messages" title="Повідомлення">✉</button><button class="header-create" type="button" data-action="post-open" title="Написати допис"><span>＋</span> Новий допис</button><button class="top-me" data-nav="profile"><span id="topMyName">Мій профіль</span><span class="top-avatar" id="topAvatar">К</span>⌄</button></div></div></header>
   <div class="container site-layout">
     <aside class="left-panel"><nav id="mainNav">
       <button data-nav="profile"><span>◉</span>Моя сторінка</button>
@@ -68,8 +68,8 @@ if ('caches' in window) caches.keys()
   .then(keys => keys.filter(k => k.startsWith('konta-shell')).forEach(k => caches.delete(k))).catch(() => {});
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=8"></script>
-<script src="app.js?v=8" defer></script>
-<script src="media.js?v=8" defer></script>
-<script src="classic.js?v=8" defer></script>
+<script src="config.js?v=9"></script>
+<script src="app.js?v=9" defer></script>
+<script src="media.js?v=9" defer></script>
+<script src="classic.js?v=9" defer></script>
 </body></html>
