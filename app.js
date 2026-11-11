@@ -135,7 +135,7 @@ function schedulePeopleSearch(query){
  peopleSearchTimer=setTimeout(async()=>{
   // Use parameterized PostgREST filters, not hand-written .or() SQL strings.
   // Remove wildcard characters so searching by a literal nickname stays predictable.
-  const safe=q.replace(/[%_\\]/g,'').trim();
+  const safe=q.replace(/[%\\]/g,'').trim();
   if(safe.length<2)return;
   const terms=[db.from('profiles').select('id,username,display_name,bio,avatar_url,created_at').ilike('username','%'+safe+'%').limit(60),
                db.from('profiles').select('id,username,display_name,bio,avatar_url,created_at').ilike('display_name','%'+safe+'%').limit(60)];
