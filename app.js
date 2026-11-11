@@ -161,10 +161,12 @@ function renderCommentNode(c,children,depth=0){
  const author=byId(c.user_id)||{display_name:'Користувач',username:'user'};
  const likes=state.commentLikes.filter(l=>l.comment_id===c.id),liked=likes.some(l=>l.user_id===me());
  const replies=children.get(c.id)||[];
+ const own=c.user_id===me(),post=state.posts.find(p=>p.id===c.post_id);
+ const canDelete=own||post?.user_id===me();
  return `<div class="comment-thread ${depth?'is-reply':''}" id="comment-${esc(c.id)}">
  <div class="comment-line">${avatar(author,'sm')}<div class="comment-content">
- <div class="comment-message"><a href="#" data-action="profile-open" data-id="${esc(c.user_id)}">${esc(author.display_name)}</a><span>${esc(c.body)}</span></div>
- <div class="comment-tools"><time>${esc(fmtTime(c.created_at))}</time><button type="button" data-action="comment-reply" data-id="${esc(c.id)}">Відповісти</button>${c.user_id===me()?`<button type="button" data-action="comment-delete" data-id="${esc(c.id)}" title="Видалити коментар">Видалити</button>`:''}<button type="button" class="comment-heart ${liked?'is-liked':''}" aria-label="${liked?'Прибрати лайк з коментаря':'Вподобати коментар'}" aria-pressed="${liked}" data-action="comment-like" data-id="${esc(c.id)}">${liked?'♥':'♡'} <span>${likes.length||''}</span></button></div>
+ <div class="comment-message"><a href="#" data-action="profile-open" data-id="${esc(c.user_id)}">${esc(author.display_name)}</a><span class="comment-body">${esc(c.body)}</span></div>
+ <div class="comment-tools"><time>${esc(fmtTime(c.created_at))}</time>${c.edited_at?'<span class="comment-edited">змінено</span>':''}<button type="button" data-action="comment-reply" data-id="${esc(c.id)}">Відповісти</button>${own?`<button type="button" data-action="comment-edit-open" data-id="${esc(c.id)}">Редагувати</button>`:''}${canDelete?`<button type="button" data-action="comment-delete" data-id="${esc(c.id)}" title="${own?'Видалити свій коментар':'Прибрати коментар зі свого допису'}">Видалити</button>`:''}<button type="button" class="comment-heart ${liked?'is-liked':''}" aria-label="${liked?'Прибрати лайк з коментаря':'Вподобати коментар'}" aria-pressed="${liked}" data-action="comment-like" data-id="${esc(c.id)}">${liked?'♥':'♡'} <span>${likes.length||''}</span></button></div>
  </div></div>${replies.map(r=>renderCommentNode(r,children,Math.min(depth+1,3))).join('')}</div>`;
 }
 function postCard(p){
@@ -451,6 +453,56 @@ async function refreshMembershipUI(){
  renderSuggestions();
 }
 
+
+function closeCommentEditors(){
+ document.querySelectorAll('.comment-edit-form').forEach(form=>{
+  const content=form.closest('.comment-content');
+  content?.querySelector('.comment-message')?.removeAttribute('hidden');
+  content?.querySelector('.comment-tools')?.removeAttribute('hidden');
+  form.remove();
+ });
+}
+function openCommentEditor(id){
+ const c=state.comments.find(item=>item.id===id);
+ if(!c||c.user_id!==me())return;
+ const root=document.getElementById('comment-'+id);
+ if(!root)return;
+ closeCommentEditors();
+ const content=root.querySelector('.comment-line > .comment-content');
+ if(!content)return;
+ const form=document.createElement('form');
+ form.className='comment-edit-form';
+ form.dataset.commentId=id;
+ form.innerHTML='<textarea name="commentEdit" maxlength="500" rows="3" required aria-label="Редагувати текст коментаря"></textarea><div class="comment-edit-actions"><button class="btn primary small" type="submit">Зберегти</button><button class="btn secondary small" type="button" data-action="comment-edit-cancel" data-id="'+id+'">Скасувати</button></div>';
+ form.querySelector('textarea').value=c.body;
+ content.querySelector('.comment-message')?.setAttribute('hidden','');
+ content.querySelector('.comment-tools')?.setAttribute('hidden','');
+ content.appendChild(form);
+ form.querySelector('textarea').focus({preventScroll:true});
+}
+async function submitCommentEdit(form){
+ const id=form.dataset.commentId;
+ const c=state.comments.find(item=>item.id===id);
+ if(!c||c.user_id!==me())return;
+ const field=form.querySelector('[name="commentEdit"]');
+ const body=field?.value.trim()||'';
+ if(!body||body.length>500){toast('Коментар має містити від 1 до 500 символів');field?.focus();return}
+ if(body===c.body){closeCommentEditors();return}
+ const button=form.querySelector('button[type="submit"]');
+ button.disabled=true;
+ try{
+  const {data,error}=await db.from('comments')
+   .update({body,edited_at:new Date().toISOString()})
+   .eq('id',id).eq('user_id',me())
+   .select('id,body,edited_at').maybeSingle();
+  if(error)throw error;
+  if(!data)throw Error('Не вдалося змінити коментар. Перевір права доступу.');
+  state.comments=state.comments.map(item=>item.id===id?{...item,...data}:item);
+  paintPostComments(c.post_id);
+  toast('Коментар змінено');
+ }catch(error){toast(errText(error));if(document.contains(button))button.disabled=false}
+}
+
 async function performAction(action,id,node){if(!state.user&&!['reload'].includes(action))return;try{
  switch(action){
  case 'reload':initialLoadError=null;await loadAll(true);break;
@@ -467,6 +519,8 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'comment-expand':{if(expandedComments.has(id))expandedComments.delete(id);else expandedComments.add(id);paintPostComments(id);break}
  case 'comment-reply':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;expandedComments.add(comment.post_id);paintPostComments(comment.post_id);const form=$(`#post-${comment.post_id} .comment-form`);if(!form)break;form.dataset.parentId=id;$('.reply-banner',form).hidden=false;$('.reply-caption',form).textContent=`Відповідь для ${byId(comment.user_id)?.display_name||'користувача'}`;const input=$('[name="comment"]',form);input.placeholder='Напишіть відповідь...';input.focus();break}
  case 'comment-reply-cancel':{const form=$(`#post-${id} .comment-form`);if(!form)break;delete form.dataset.parentId;$('.reply-banner',form).hidden=true;const input=$('[name="comment"]',form);input.placeholder='Написати коментар...';input.focus();break}
+ case 'comment-edit-open':openCommentEditor(id);break;
+ case 'comment-edit-cancel':closeCommentEditors();break;
  case 'comment-like':await toggleCommentLike(id);break;
  case 'chat-back':state.chatId=null;state.chatReplyId=null;state.chatEditId=null;render();break;
  case 'chat-reply':{const m=state.messages.find(x=>x.id===id&&(x.sender_id===state.chatId||x.recipient_id===state.chatId));if(!m)break;state.chatReplyId=id;state.chatEditId=null;render();$('#messageForm textarea')?.focus();break}
@@ -485,7 +539,17 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  }
  case 'post-like':await togglePostLike(id);break;
  case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;state.posts=state.posts.filter(x=>x.id!==id);document.getElementById('post-'+id)?.remove();toast('Допис видалено');break}
- case 'comment-delete':{const c=state.comments.find(c=>c.id===id);if(!c||c.user_id!==me())break;const {error}=await db.from('comments').delete().eq('id',id).eq('user_id',me());if(error)throw error;await reloadCommentsForPost(c.post_id);break}
+ case 'comment-delete':{
+  const c=state.comments.find(item=>item.id===id),post=c?state.posts.find(p=>p.id===c.post_id):null;
+  if(!c||(c.user_id!==me()&&post?.user_id!==me()))break;
+  if(!confirm(c.user_id===me()?'Видалити свій коментар?':'Видалити коментар під своїм дописом?'))break;
+  const {data,error}=await db.from('comments').delete().eq('id',id).select('id').maybeSingle();
+  if(error)throw error;
+  if(!data)throw Error('Не вдалося видалити коментар. Перевір права доступу.');
+  await reloadCommentsForPost(c.post_id,true);
+  toast('Коментар видалено');
+  break;
+ }
  case 'friend-add':{if(id===me()||!idOK(id))break;const {error}=await db.from('friendships').insert({requester_id:me(),addressee_id:id,status:'pending'});if(error)throw error;await refreshFriendshipUI();toast('Запит у друзі надіслано!');break}
  case 'friend-accept':{const rec=friendRecord(id);if(!rec||rec.addressee_id!==me())break;const {error}=await db.from('friendships').update({status:'accepted'}).eq('id',rec.id).eq('addressee_id',me());if(error)throw error;await refreshFriendshipUI();toast('Тепер ви друзі!');break}
  case 'friend-remove':{const rec=friendRecord(id);if(!rec)break;const {error}=await db.from('friendships').delete().eq('id',rec.id);if(error)throw error;await refreshFriendshipUI();toast(rec.status==='accepted'?'Видалено з друзів':'Заявку скасовано');break}
@@ -550,7 +614,7 @@ function wireEvents(){
  $('#topSearch').addEventListener('input',e=>schedulePeopleSearch(e.target.value));
  $('#topSearch').addEventListener('focus',()=>repaintPeopleResults());
  document.addEventListener('input',event=>{if(event.target.id==='exploreInput'){state.search=event.target.value;schedulePeopleSearch(state.search)}if(event.target.matches('#messageForm textarea[name="body"]')&&state.chatId)messageDrafts.set(state.chatId,event.target.value);if(event.target.id==='chatSearch'){const q=event.target.value.trim().toLocaleLowerCase('uk-UA');$('.chat-list-item').forEach(n=>n.hidden=!n.dataset.chatName?.includes(q))}if(event.target.id==='friendsSearchInput'){state.friendSearch=event.target.value;schedulePeopleSearch(state.friendSearch)}});
- document.addEventListener('submit',e=>{if(e.target.matches('.comment-form')){e.preventDefault();submitComment(e.target)}else if(e.target.id==='messageForm'){e.preventDefault();sendMessage(e.target)}});
+ document.addEventListener('submit',e=>{if(e.target.matches('.comment-form')){e.preventDefault();submitComment(e.target)}else if(e.target.matches('.comment-edit-form')){e.preventDefault();submitCommentEdit(e.target)}else if(e.target.id==='messageForm'){e.preventDefault();sendMessage(e.target)}});
  document.addEventListener('keydown',e=>{if(e.target.matches('#messageForm textarea[name="body"]')&&e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&(state.preferences?.enter_to_send!==false||e.ctrlKey||e.metaKey)){e.preventDefault();e.target.closest('form')?.requestSubmit()}});
  document.addEventListener('click',e=>{
   const closer=e.target.closest('[data-close]');if(closer){document.getElementById(closer.dataset.close)?.close();return}
