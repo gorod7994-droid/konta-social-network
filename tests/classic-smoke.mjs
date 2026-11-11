@@ -7,8 +7,9 @@ const app=fs.readFileSync('app.js','utf8');
 const media=fs.readFileSync('media.js','utf8');
 const classic=fs.readFileSync('classic.js','utf8');
 const css=fs.readFileSync('classic.css','utf8');
+const modern=fs.readFileSync('modern.css','utf8');
 
-for(const file of ['styles.css?v=7','classic.css?v=7','app.js?v=7','media.js?v=7','classic.js?v=7']){
+for(const file of ['styles.css?v=8','classic.css?v=8','modern.css?v=8','app.js?v=8','media.js?v=8','classic.js?v=8']){
  assert.ok(html.includes(file),'Missing asset: '+file);
 }
 for(const section of ['photos','videos','music','bookmarks','settings']){
@@ -17,6 +18,11 @@ for(const section of ['photos','videos','music','bookmarks','settings']){
 assert.ok(css.includes('html[data-theme="dark"]'),'Missing dark theme');
 assert.ok(css.includes('html[data-density="compact"]'),'Missing compact mode');
 assert.equal(css.split('{').length,css.split('}').length,'CSS braces mismatch');
+assert.equal(modern.split('{').length,modern.split('}').length,'Modern CSS braces mismatch');
+assert.ok(modern.includes('html[data-theme="dark"]'),'Modern dark styles missing');
+assert.ok(modern.includes('@media (max-width:720px)'),'Mobile styles missing');
+assert.ok(modern.includes('prefers-reduced-motion'),'Reduced-motion styles missing');
+assert.ok(html.includes('class="header-create"'),'Quick create button missing');
 
 const context=vm.createContext({
  window:{innerWidth:1200},
@@ -55,6 +61,8 @@ assert.ok(profile.includes('profile-classic'),'Missing classic profile');
 assert.ok(profile.includes('Стіна'),'Missing profile wall');
 const news=vm.runInContext('viewFeed()',context);
 assert.ok(news.includes('Спільноти')&&news.includes('Сподобалося'),'Missing news filters');
+assert.ok(news.includes('feed-hero'),'Modern welcome card missing');
+assert.ok(news.includes('Привіт, Користувач'),'Personalized greeting missing');
 const bookmarks=vm.runInContext('viewBookmarks()',context);
 assert.ok(bookmarks.includes('Тестова новина'),'Missing liked post');
 const settings=vm.runInContext('viewSettings()',context);
@@ -65,4 +73,4 @@ vm.runInContext("window.KONTA_CLASSIC.applyPreferences({theme:'dark',density:'co
 assert.equal(context.document.documentElement.dataset.theme,'dark');
 assert.equal(context.document.documentElement.dataset.density,'compact');
 assert.equal(vm.runInContext('state.preferences.enter_to_send',context),false);
-console.log('KONTA 7 classic smoke tests passed');
+console.log('KONTA 8 modern design smoke tests passed');
