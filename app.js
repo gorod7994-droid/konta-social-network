@@ -256,6 +256,124 @@ async function handlePostSubmit(ev){ev.preventDefault();if(loading)return;loadin
 async function handleProfileSubmit(ev){ev.preventDefault();if(loading)return;loading=true;setBusy('#profileSubmit',true);feedback('#profileFeedback','Зберігаємо...');try{const name=$('#profileName').value.trim(),username=$('#profileUsername').value.trim().toLowerCase(),bio=$('#profileBio').value.trim();if(!/^[a-z0-9_]{3,24}$/.test(username))throw Error('Нікнейм: 3–24 латинські літери, цифри або _.');if(!name)throw Error('Введи ім’я.');const file=$('#avatarFile').files[0];const avatar_url=file?await uploadImage(file,'avatar'):state.profile?.avatar_url||null;const {error}=await db.from('profiles').update({display_name:name,username,bio,avatar_url}).eq('id',me());if(error)throw error;$('#profileDialog').close();await afterChange('Профіль оновлено!')}catch(error){feedback('#profileFeedback',errText(error),true)}finally{loading=false;setBusy('#profileSubmit',false)}}
 async function handleGroupSubmit(ev){ev.preventDefault();if(loading)return;loading=true;setBusy('#groupSubmit',true);feedback('#groupFeedback','Створюємо...');try{const name=$('#groupName').value.trim(),description=$('#groupDescription').value.trim();const {data,error}=await db.from('communities').insert({owner_id:me(),name,description}).select('id').single();if(error)throw error;const join=await db.from('community_members').insert({community_id:data.id,user_id:me()});if(join.error)throw join.error;$('#groupDialog').close();await afterChange('Спільноту створено!');go('group',{groupId:data.id})}catch(error){feedback('#groupFeedback',errText(error),true)}finally{loading=false;setBusy('#groupSubmit',false)}}
 async function handleResetSubmit(ev){ev.preventDefault();const pw=$('#resetPassword').value;if(pw.length<6)return feedback('#resetFeedback','Мінімум 6 символів.',true);const {error}=await db.auth.updateUser({password:pw});if(error){feedback('#resetFeedback',errText(error),true);return}$('#resetDialog').close();toast('Пароль змінено.');}
+
+/* Lightweight updates: actions only repaint the UI node that actually changed. */
+function paintPostLike(id){
+ if(!idOK(id))return;
+ const post=document.getElementById('post-'+id);
+ if(!post)return;
+ const count=state.likes.filter(l=>l.post_id===id).length;
+ const liked=state.likes.some(l=>l.post_id===id&&l.user_id===me());
+ const btn=post.querySelector('[data-action="post-like"]');
+ if(btn){btn.classList.toggle('is-liked',liked);btn.setAttribute('aria-pressed',String(liked));btn.innerHTML='<span>'+(liked?'♥':'♡')+'</span>'+count;}
+ if(!liked&&(state.view==='bookmarks'||state.view==='feed'&&state.feedFilter==='liked'))post.remove();
+}
+function paintCommentLike(id){
+ if(!idOK(id))return;
+ const likes=state.commentLikes.filter(l=>l.comment_id===id),liked=likes.some(l=>l.user_id===me());
+ document.querySelectorAll('[data-action="comment-like"][data-id="'+id+'"]').forEach(btn=>{
+  btn.classList.toggle('is-liked',liked);
+  btn.setAttribute('aria-pressed',String(liked));
+  btn.setAttribute('aria-label',liked?'Прибрати лайк з коментаря':'Вподобати коментар');
+  btn.innerHTML=(liked?'♥':'♡')+' <span>'+(likes.length||'')+'</span>';
+ });
+}
+function paintAllReactions(){
+ document.querySelectorAll('[data-action="post-like"]').forEach(btn=>paintPostLike(btn.dataset.id));
+ document.querySelectorAll('[data-action="comment-like"]').forEach(btn=>paintCommentLike(btn.dataset.id));
+}
+function paintPostComments(postId,preserveDraft=true){
+ if(!idOK(postId))return;
+ const card=document.getElementById('post-'+postId);
+ const post=state.posts.find(p=>p.id===postId);
+ if(!card||!post)return;
+ const old=card.querySelector('.comment-area');
+ if(!old)return;
+ const form=old.querySelector('.comment-form');
+ const draft=preserveDraft&&form?form.querySelector('[name="comment"]')?.value||'':'';
+ const parentId=preserveDraft&&form?form.dataset.parentId||'':'';
+ const focused=preserveDraft&&form&&form.contains(document.activeElement);
+ const temp=document.createElement('div');
+ temp.innerHTML=postCard(post);
+ const updated=temp.querySelector('.comment-area');
+ if(!updated)return;
+ old.replaceWith(updated);
+ const count=state.comments.filter(c=>c.post_id===postId).length;
+ const countButton=card.querySelector('[data-action="comment-focus"]');
+ if(countButton)countButton.innerHTML='<span>▢</span>'+count+' коментарів';
+ const newForm=updated.querySelector('.comment-form');
+ if(newForm&&draft){newForm.querySelector('[name="comment"]').value=draft}
+ if(newForm&&parentId){
+  newForm.dataset.parentId=parentId;
+  const parent=state.comments.find(c=>c.id===parentId);
+  const banner=newForm.querySelector('.reply-banner');
+  if(banner){banner.hidden=false;newForm.querySelector('.reply-caption').textContent='Відповідь для '+(byId(parent?.user_id)?.display_name||'користувача')}
+  newForm.querySelector('[name="comment"]').placeholder='Напишіть відповідь...';
+ }
+ if(focused)newForm?.querySelector('[name="comment"]')?.focus({preventScroll:true});
+}
+async function reloadCommentsForPost(postId,preserveDraft=false){
+ const {data,error}=await db.from('comments').select('*').eq('post_id',postId).order('created_at',{ascending:true}).limit(500);
+ if(error)throw error;
+ state.comments=state.comments.filter(c=>c.post_id!==postId).concat(data||[]);
+ paintPostComments(postId,preserveDraft);
+}
+async function togglePostLike(id){
+ if(!idOK(id)||!state.posts.some(p=>p.id===id))return;
+ const key='post:'+id;if(pendingReactions.has(key))return;
+ pendingReactions.add(key);
+ const prev=state.likes,liked=prev.some(l=>l.post_id===id&&l.user_id===me());
+ state.likes=liked?prev.filter(l=>!(l.post_id===id&&l.user_id===me())):[...prev,{post_id:id,user_id:me(),created_at:new Date().toISOString()}];
+ paintPostLike(id);
+ try{
+  const req=liked?db.from('likes').delete().eq('post_id',id).eq('user_id',me()):db.from('likes').insert({post_id:id,user_id:me()});
+  const {error}=await req;
+  if(error)throw error;
+ }catch(error){state.likes=prev;paintPostLike(id);toast(errText(error));}
+ finally{pendingReactions.delete(key)}
+}
+async function toggleCommentLike(id){
+ if(!idOK(id)||!state.comments.some(c=>c.id===id))return;
+ const key='comment:'+id;if(pendingReactions.has(key))return;
+ pendingReactions.add(key);
+ const prev=state.commentLikes,liked=prev.some(l=>l.comment_id===id&&l.user_id===me());
+ state.commentLikes=liked?prev.filter(l=>!(l.comment_id===id&&l.user_id===me())):[...prev,{comment_id:id,user_id:me(),created_at:new Date().toISOString()}];
+ paintCommentLike(id);
+ try{
+  const req=liked?db.from('comment_likes').delete().eq('comment_id',id).eq('user_id',me()):db.from('comment_likes').insert({comment_id:id,user_id:me()});
+  const {error}=await req;
+  if(error)throw error;
+ }catch(error){state.commentLikes=prev;paintCommentLike(id);toast(errText(error));}
+ finally{pendingReactions.delete(key)}
+}
+function paintChatWithoutRemount(){
+ if(state.view!=='messages')return;
+ const current=document.querySelector('#messageScroll');
+ const parent=$('.message-layout');
+ if(!parent)return;
+ const preservedInput=$('#messageForm textarea');
+ const currentDraft=preservedInput?.value||'';
+ const currentSearch=$('#chatSearch')?.value||'';
+ const nearBottom=current?current.scrollHeight-current.scrollTop-current.clientHeight<130:true;
+ const oldPos=current?.scrollTop||0;
+ const tmp=document.createElement('div');tmp.innerHTML=viewMessages();
+ const nextScroll=tmp.querySelector('#messageScroll');
+ if(current&&nextScroll){
+  current.innerHTML=nextScroll.innerHTML;
+  current.scrollTop=nearBottom?current.scrollHeight:oldPos;
+ }
+ const currentList=parent.querySelector('.conversation-list'),newList=tmp.querySelector('.conversation-list');
+ if(currentList&&newList){
+  currentList.querySelectorAll('.chat-list-item').forEach(n=>n.remove());
+  const rows=Array.from(newList.querySelectorAll('.chat-list-item'));
+  for(const row of rows)currentList.appendChild(row);
+  const count=currentList.querySelector('.chat-list-heading span');if(count)count.textContent=String(rows.length);
+  const search=currentList.querySelector('#chatSearch');if(search)search.value=currentSearch;
+  if(currentSearch){const q=currentSearch.toLocaleLowerCase('uk-UA');rows.forEach(n=>n.hidden=!n.dataset.chatName?.includes(q))}
+ }
+ if(preservedInput&&document.contains(preservedInput))preservedInput.value=currentDraft;
+}
+
 async function performAction(action,id,node){if(!state.user&&!['reload'].includes(action))return;try{
  switch(action){
  case 'reload':initialLoadError=null;await loadAll(true);break;
@@ -269,10 +387,10 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'feed-tab':state.feedFilter=id;render();break;
  case 'friends-tab':state.friendsTab=id;render();break;
  case 'comment-focus':$('#post-'+id+' .comment-form input')?.focus();break;
- case 'comment-expand':{if(expandedComments.has(id))expandedComments.delete(id);else expandedComments.add(id);render();break}
- case 'comment-reply':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;expandedComments.add(comment.post_id);render();const form=$(`#post-${comment.post_id} .comment-form`);if(!form)break;form.dataset.parentId=id;$('.reply-banner',form).hidden=false;$('.reply-caption',form).textContent=`Відповідь для ${byId(comment.user_id)?.display_name||'користувача'}`;const input=$('[name="comment"]',form);input.placeholder='Напишіть відповідь...';input.focus();break}
+ case 'comment-expand':{if(expandedComments.has(id))expandedComments.delete(id);else expandedComments.add(id);paintPostComments(id);break}
+ case 'comment-reply':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;expandedComments.add(comment.post_id);paintPostComments(comment.post_id);const form=$(`#post-${comment.post_id} .comment-form`);if(!form)break;form.dataset.parentId=id;$('.reply-banner',form).hidden=false;$('.reply-caption',form).textContent=`Відповідь для ${byId(comment.user_id)?.display_name||'користувача'}`;const input=$('[name="comment"]',form);input.placeholder='Напишіть відповідь...';input.focus();break}
  case 'comment-reply-cancel':{const form=$(`#post-${id} .comment-form`);if(!form)break;delete form.dataset.parentId;$('.reply-banner',form).hidden=true;const input=$('[name="comment"]',form);input.placeholder='Написати коментар...';input.focus();break}
- case 'comment-like':{const comment=state.comments.find(c=>c.id===id);if(!comment)break;const liked=state.commentLikes.some(l=>l.comment_id===id&&l.user_id===me());const req=liked?db.from('comment_likes').delete().eq('comment_id',id).eq('user_id',me()):db.from('comment_likes').insert({comment_id:id,user_id:me()});const {error}=await req;if(error)throw error;await afterChange();break}
+ case 'comment-like':await toggleCommentLike(id);break;
  case 'chat-back':state.chatId=null;state.chatReplyId=null;state.chatEditId=null;render();break;
  case 'chat-reply':{const m=state.messages.find(x=>x.id===id&&(x.sender_id===state.chatId||x.recipient_id===state.chatId));if(!m)break;state.chatReplyId=id;state.chatEditId=null;render();$('#messageForm textarea')?.focus();break}
  case 'chat-edit':{const m=state.messages.find(x=>x.id===id&&x.sender_id===me()&&x.recipient_id===state.chatId);if(!m)break;state.chatEditId=id;state.chatReplyId=null;messageDrafts.set(state.chatId,m.body);render();$('#messageForm textarea')?.focus();break}
@@ -288,9 +406,9 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
   if(navigator.share){try{await navigator.share({title:'KONTA',text:p.body?.slice(0,130)||'Допис у KONTA',url})}catch(_){}}else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Посилання на допис скопійовано')}else toast('Копіювання недоступне');
   break;
  }
- case 'post-like':{const liked=state.likes.find(l=>l.user_id===me()&&l.post_id===id);const req=liked?db.from('likes').delete().eq('post_id',id).eq('user_id',me()):db.from('likes').insert({post_id:id,user_id:me()});const {error}=await req;if(error)throw error;await afterChange();break}
- case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;await afterChange('Допис видалено');break}
- case 'comment-delete':{const c=state.comments.find(c=>c.id===id);if(!c||c.user_id!==me())break;const {error}=await db.from('comments').delete().eq('id',id).eq('user_id',me());if(error)throw error;await afterChange();break}
+ case 'post-like':await togglePostLike(id);break;
+ case 'post-delete':{const p=state.posts.find(p=>p.id===id);if(p?.user_id!==me())break;if(!confirm('Видалити цей допис?'))break;const {error}=await db.from('posts').delete().eq('id',id).eq('user_id',me());if(error)throw error;state.posts=state.posts.filter(x=>x.id!==id);document.getElementById('post-'+id)?.remove();toast('Допис видалено');break}
+ case 'comment-delete':{const c=state.comments.find(c=>c.id===id);if(!c||c.user_id!==me())break;const {error}=await db.from('comments').delete().eq('id',id).eq('user_id',me());if(error)throw error;await reloadCommentsForPost(c.post_id);break}
  case 'friend-add':{if(id===me()||!idOK(id))break;const {error}=await db.from('friendships').insert({requester_id:me(),addressee_id:id,status:'pending'});if(error)throw error;await afterChange('Запит у друзі надіслано!');break}
  case 'friend-accept':{const rec=friendRecord(id);if(!rec||rec.addressee_id!==me())break;const {error}=await db.from('friendships').update({status:'accepted'}).eq('id',rec.id).eq('addressee_id',me());if(error)throw error;await afterChange('Тепер ви друзі!');break}
  case 'friend-remove':{const rec=friendRecord(id);if(!rec)break;const {error}=await db.from('friendships').delete().eq('id',rec.id);if(error)throw error;await afterChange(rec.status==='accepted'?'Видалено з друзів':'Заявку скасовано');break}
@@ -299,7 +417,21 @@ async function performAction(action,id,node){if(!state.user&&!['reload'].include
  case 'notice-read':{const {error}=await db.from('notifications').update({is_read:true}).eq('target_id',me()).eq('is_read',false);if(error)throw error;await afterChange('Сповіщення прочитано');break}
  default:if(action.startsWith('media-')&&window.KONTA_MEDIA)await window.KONTA_MEDIA.action(action,id);else if(action.startsWith('classic-')&&window.KONTA_CLASSIC)await window.KONTA_CLASSIC.action(action,id,node);break;
  }}catch(error){toast(errText(error))}}
-async function submitComment(form){const postId=form.dataset.postId,body=$('[name="comment"]',form).value.trim();if(!body||!idOK(postId))return;const btn=$('button[type="submit"]',form);btn.disabled=true;try{const parentId=form.dataset.parentId||null;if(parentId&&!state.comments.some(c=>c.id===parentId&&c.post_id===postId))throw Error('Неправильна відповідь.');const {error}=await db.from('comments').insert({post_id:postId,user_id:me(),body,parent_id:parentId});if(error)throw error;expandedComments.add(postId);await afterChange(parentId?'Відповідь додано':'Коментар додано')}catch(error){toast(errText(error));btn.disabled=false}}
+async function submitComment(form){
+ const postId=form.dataset.postId,body=$('[name="comment"]',form).value.trim();
+ if(!body||!idOK(postId))return;
+ const btn=$('button[type="submit"]',form);
+ btn.disabled=true;
+ try{
+  const parentId=form.dataset.parentId||null;
+  if(parentId&&!state.comments.some(c=>c.id===parentId&&c.post_id===postId))throw Error('Неправильна відповідь.');
+  const {error}=await db.from('comments').insert({post_id:postId,user_id:me(),body,parent_id:parentId});
+  if(error)throw error;
+  expandedComments.add(postId);
+  await reloadCommentsForPost(postId,false);
+  toast(parentId?'Відповідь додано':'Коментар додано');
+ }catch(error){toast(errText(error));if(document.contains(btn))btn.disabled=false}
+}
 async function sendMessage(form){
  if(!state.chatId||!idOK(state.chatId))return;
  const input=$('[name="body"]',form),body=input.value.trim();if(!body)return;
