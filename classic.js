@@ -55,15 +55,40 @@ async function setPref(field,value){
  if(field==='enter_to_send'&&typeof value!=='boolean')return;
  const old=getPrefs(),next={...old,[field]:value};
  applyPreferences(next);
- if(field==='feed_default'){state.feedFilter=next.feed_default;}
- window.render();
+ if(field==='feed_default')state.feedFilter=next.feed_default;
+ // Theme and density are driven by CSS variables. Don't remount the settings page.
+ function syncControls(){
+  document.querySelectorAll('.settings-choice[data-field="'+field+'"]').forEach(button=>{
+   const selected=button.dataset.id===next[field];
+   button.classList.toggle('is-selected',selected);
+   button.setAttribute('aria-pressed',String(selected));
+  });
+  const send=document.querySelector('#classicEnterToSend');
+  if(send){
+   send.checked=next.enter_to_send;
+   const label=send.parentElement?.querySelector('span:last-child');
+   if(label)label.textContent=next.enter_to_send?'Увімкнено':'Вимкнено';
+  }
+ }
+ syncControls();
  pending=true;
  try{
   const {error}=await db.from('user_preferences').upsert({user_id:me(),...next,updated_at:new Date().toISOString()},{onConflict:'user_id'});
   if(error)throw error;
   toast('Налаштування збережено');
- }catch(error){applyPreferences(old);window.render();toast('Не вдалося зберегти: '+errText(error));}
- finally{pending=false}
+ }catch(error){
+  applyPreferences(old);
+  state.feedFilter=old.feed_default;
+  document.querySelectorAll('.settings-choice[data-field="'+field+'"]').forEach(button=>{
+   const selected=button.dataset.id===old[field];
+   button.classList.toggle('is-selected',selected);
+   button.setAttribute('aria-pressed',String(selected));
+  });
+  const send=document.querySelector('#classicEnterToSend');
+  if(send){send.checked=old.enter_to_send;const label=send.parentElement?.querySelector('span:last-child');if(label)label.textContent=old.enter_to_send?'Увімкнено':'Вимкнено';}
+  const feed=document.querySelector('#classicFeedDefault');if(feed)feed.value=old.feed_default;
+  toast('Не вдалося зберегти: '+errText(error));
+ }finally{pending=false}
 }
 function action(name,id,node){
  if(name==='classic-option'){
