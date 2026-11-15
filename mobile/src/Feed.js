@@ -1,10 +1,10 @@
 import React,{useMemo,useState} from 'react';
-import {View,Text,Image,ScrollView,FlatList,Pressable,Alert} from 'react-native';
+import {View,Text,Image,ScrollView,FlatList,Pressable,Alert,Modal} from 'react-native';
 import {db,prettyDate,displayName,choosePhoto,uploadPhoto,showError,photoUrl} from './core';
 import {C,S,Avatar,Btn,Field,Empty} from './ui';
 
 export function Feed({data,uid,refresh,openProfile}) {
- const [draft,setDraft]=useState(''),[picture,setPicture]=useState(null),[busy,setBusy]=useState(false),[expanded,setExpanded]=useState(null);
+ const [draft,setDraft]=useState(''),[picture,setPicture]=useState(null),[busy,setBusy]=useState(false),[expanded,setExpanded]=useState(null),[story,setStory]=useState(null);
  const profiles=useMemo(()=>Object.fromEntries(data.profiles.map(p=>[p.id,p])),[data.profiles]);
  async function act(task) {try{await task();await refresh()}catch(e){Alert.alert('KONTA',showError(e))}}
  async function selectPhoto(){try{setPicture(await choosePhoto())}catch(e){Alert.alert('Фото',showError(e))}}
@@ -31,15 +31,22 @@ export function Feed({data,uid,refresh,openProfile}) {
   </View>
   <View style={S.card}>
     <View style={[S.row,{justifyContent:'space-between',marginBottom:8}]}><Text style={S.h}>Історії друзів</Text><Btn soft small label="+ Історія" onPress={addStory}/></View>
-    {data.stories.length?<ScrollView horizontal showsHorizontalScrollIndicator={false}>{data.stories.map(st=><Pressable key={st.id} onPress={()=>Alert.alert(displayName(profiles[st.user_id]),'Переглянути історію можна через стрічку або сайт KONTA.')} style={{width:80,marginRight:9,alignItems:'center'}}><Avatar profile={profiles[st.user_id]} size={58}/><Text style={[S.muted,{marginTop:4}]} numberOfLines={1}>{displayName(profiles[st.user_id])}</Text></Pressable>)}</ScrollView>:<Text style={S.muted}>Поки немає історій. Додай першу!</Text>}
+    {data.stories.length?<ScrollView horizontal showsHorizontalScrollIndicator={false}>{data.stories.map(st=><Pressable key={st.id} onPress={()=>setStory(st)} style={{width:80,marginRight:9,alignItems:'center'}}><Avatar profile={profiles[st.user_id]} size={58}/><Text style={[S.muted,{marginTop:4}]} numberOfLines={1}>{displayName(profiles[st.user_id])}</Text></Pressable>)}</ScrollView>:<Text style={S.muted}>Поки немає історій. Додай першу!</Text>}
   </View>
   <Text style={[S.h,{marginHorizontal:6,marginBottom:12}]}>Стрічка новин</Text>
  </View>;
- return <FlatList style={S.page} contentContainerStyle={S.scroll} data={data.posts} keyExtractor={p=>p.id} ListHeaderComponent={header}
+ return <View style={{flex:1}}><FlatList style={S.page} contentContainerStyle={S.scroll} data={data.posts} keyExtractor={p=>p.id} ListHeaderComponent={header}
   ListEmptyComponent={<Empty message="Поки немає дописів. Напиши перший!"/>}
   onRefresh={refresh} refreshing={busy}
   renderItem={({item:p})=><Post post={p} uid={uid} me={profiles} likes={data.likes.filter(x=>x.post_id===p.id)} comments={data.comments.filter(x=>x.post_id===p.id)} expanded={expanded===p.id} toggleExpanded={()=>setExpanded(expanded===p.id?null:p.id)} onProfile={openProfile} act={act}/>}
-  />;
+  />
+  <Modal visible={!!story} transparent animationType="fade" onRequestClose={()=>setStory(null)}>
+    <View style={{flex:1,backgroundColor:'#111827f2',padding:16,justifyContent:'center'}}>
+      <Btn soft label="✕ Закрити історію" onPress={()=>setStory(null)} style={{marginBottom:14}}/>
+      {story?.media_type==='image'?<Image resizeMode="contain" source={{uri:story?.media_url}} style={{height:'75%',width:'100%'}}/>:<Text style={{color:'#fff',textAlign:'center'}}>Це відеоісторія. Її можна переглянути на сайті KONTA.</Text>}
+    </View>
+  </Modal>
+ </View>;
 }
 export function Post({post,uid,me,likes,comments,expanded,toggleExpanded,onProfile,act}) {
  const [body,setBody]=useState(''),[editing,setEditing]=useState(null),[editBody,setEditBody]=useState('');
