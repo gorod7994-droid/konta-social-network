@@ -1,5 +1,6 @@
 import React,{useCallback,useEffect,useState} from 'react';
-import {View,Text,ScrollView,SafeAreaView,Pressable,Alert,AppState,KeyboardAvoidingView,Platform} from 'react-native';
+import {View,Text,ScrollView,Pressable,Alert,AppState,KeyboardAvoidingView,Platform} from 'react-native';
+import {SafeAreaProvider,SafeAreaView} from 'react-native-safe-area-context';
 import {StatusBar} from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import {db,initialData,loadData,showError} from './src/core';
@@ -104,7 +105,7 @@ export default function App() {
   else go('feed');
  };
  const unreads=data.notifications.filter(n=>!n.is_read).length;
- return <SafeAreaView style={{flex:1,backgroundColor:C.white}}>
+ return <SafeAreaProvider><SafeAreaView style={{flex:1,backgroundColor:C.white}}>
   <StatusBar style="dark"/>
   {boot?<Loader/>:!session?<Auth/>:<View style={{flex:1,backgroundColor:C.bg}}>
    <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:C.white,paddingHorizontal:15,paddingVertical:10,borderBottomWidth:1,borderBottomColor:C.line}}>
@@ -133,5 +134,5 @@ export default function App() {
      </Pressable>)}
    </View>
   </View>}
- </SafeAreaView>;
+ </SafeAreaView></SafeAreaProvider>;
 }
