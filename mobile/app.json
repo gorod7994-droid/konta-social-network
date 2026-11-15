@@ -3,18 +3,21 @@
     "name": "KONTA",
     "slug": "konta-ios",
     "scheme": "konta",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ua.pp.konta.app"
     },
     "plugins": [
-      "expo-web-browser"
-    ],
-    "extra": {
-      "eas": {}
-    }
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "KONTA потрібен доступ до фотографій для аватарів, історій і дописів."
+        }
+      ]
+    ]
   }
 }
