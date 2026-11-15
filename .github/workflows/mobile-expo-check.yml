@@ -1,0 +1,23 @@
+name: KONTA iOS Expo check
+on:
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile-expo-check.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+jobs:
+  expo-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+      - name: Export iOS JavaScript bundle
+        working-directory: mobile
+        run: npx expo export --platform ios
