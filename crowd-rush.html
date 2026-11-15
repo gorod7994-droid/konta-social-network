@@ -370,13 +370,10 @@ function activateTurbo(){
  hud();
 }
 el('turbo').addEventListener('click',activateTurbo);
-el('play').addEventListener('click',()=>{beep(450,.08);setup()});
+el('play').addEventListener('click',()=>{beep(450,.08);if(phase==='paused'){phase='playing';el('overlay').hidden=true}else setup()});
 el('pause').addEventListener('click',()=>{
  if(phase==='playing'){phase='paused';showPanel('⏸️','ПАУЗА','Бій призупинено. Натисни «Продовжити», щоб повернутися.','▶ ПРОДОВЖИТИ')}
  else if(phase==='paused'){phase='playing';el('overlay').hidden=true}
-});
-el('play').addEventListener('click',()=>{
- if(phase==='paused'){phase='playing';el('overlay').hidden=true}
 });
 function upgrade(kind){
  const c=kind==='rate'?70+saved.rate*75:85+saved.power*80;
