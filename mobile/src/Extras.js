@@ -68,13 +68,13 @@ export function Games() {
  const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
  const winner=lines.reduce((found,[a,b,c])=>found||(board[a]&&board[a]===board[b]&&board[b]===board[c]?board[a]:null),null);
  function move(i){if(winner||board[i])return;const next=[...board];next[i]=turn;setBoard(next);setTurn(turn==='❌'?'⭕':'❌')}
- if(game==='bottle'||game==='catalog'||game==='crowd')return <View style={S.page}>
-   <View style={[S.row,{padding:10,backgroundColor:C.white}]}><Btn small soft label="‹ До ігор" onPress={()=>setGame(null)}/><Text style={S.h}>{game==='bottle'?'Бутилочка':game==='crowd'?'Crowd Rush':'Ігри KONTA'}</Text></View>
-   <WebView style={{flex:1}} source={{uri:game==='bottle'?'https://konta.pp.ua/games.html?game=bottle':game==='crowd'?'https://konta.pp.ua/crowd-rush.html':'https://konta.pp.ua/games.html'}} startInLoadingState allowsBackForwardNavigationGestures/>
+ if(game==='bottle'||game==='catalog')return <View style={S.page}>
+   <View style={[S.row,{padding:10,backgroundColor:C.white}]}><Btn small soft label="‹ До ігор" onPress={()=>setGame(null)}/><Text style={S.h}>{game==='bottle'?'Бутилочка':'Ігри KONTA'}</Text></View>
+   <WebView style={{flex:1}} source={{uri:game==='bottle'?'https://konta.pp.ua/games.html?game=bottle':'https://konta.pp.ua/games.html'}} startInLoadingState allowsBackForwardNavigationGestures/>
   </View>;
  return <ScrollView style={S.page} contentContainerStyle={S.scroll}>
   <Text style={[S.title,{marginBottom:14}]}>🎮 Ігри KONTA</Text>
-  {!game?<><Pressable style={[S.card,{borderColor:'#71b8ff',borderWidth:2}]} onPress={()=>setGame('crowd')}><Text style={S.title}>⚡ Crowd Rush</Text><Text style={S.muted}>Гармата, множники ×2/×5, армія, фортеці та прокачування · нова гра</Text></Pressable><Pressable style={S.card} onPress={()=>setGame('bottle')}><Text style={S.title}>🍾 Бутилочка онлайн</Text><Text style={S.muted}>Грай із користувачами KONTA, спілкуйся в чаті</Text></Pressable>
+  {!game?<><Pressable style={S.card} onPress={()=>setGame('bottle')}><Text style={S.title}>🍾 Бутилочка онлайн</Text><Text style={S.muted}>Грай із користувачами KONTA, спілкуйся в чаті</Text></Pressable>
     <Pressable style={S.card} onPress={()=>setGame('xo')}><Text style={S.title}>❌⭕ Хрестики-нулики</Text><Text style={S.muted}>Грай удвох на одному телефоні</Text></Pressable>
     <Pressable style={S.card} onPress={()=>setGame('catalog')}><Text style={S.title}>🎲 Усі ігри</Text><Text style={S.muted}>Каталог мініігор KONTA</Text></Pressable></>:<View style={S.card}>
     <View style={[S.row,{justifyContent:'space-between'}]}><Text style={S.h}>Хрестики-нулики</Text><Btn small soft label="Назад" onPress={()=>setGame(null)}/></View>
