@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#17264d">
+<meta name="description" content="KONTA Crowd Rush — гра про армію бійців, множники, гармату й захоплення фортеці. Грай на телефоні та комп'ютері.">
+<title>Crowd Rush — армія, ворота та захоплення фортець | KONTA</title>
+<link rel="canonical" href="https://konta.pp.ua/crowd-rush.html">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;width:100%;overflow:hidden;background:#91ceef;touch-action:none;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-user-select:none;user-select:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{font:inherit;cursor:pointer;border:0;touch-action:manipulation}
+button:active{transform:scale(.97)}
+#hud{position:fixed;z-index:3;inset:0 0 auto;pointer-events:none;padding:max(12px,env(safe-area-inset-top)) 12px 8px;color:#19335e}
+#brand{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#brand .tag{font-weight:1000;font-size:13px;letter-spacing:.065em;border-radius:13px;background:#ffffffd9;padding:9px 12px;box-shadow:0 5px 15px #1f509633}
+#brand .tag strong{color:#356beb}
+#brand button{pointer-events:auto;display:grid;place-items:center;color:#23406a;background:#ffffffdf;border-radius:12px;width:39px;height:39px;box-shadow:0 5px 15px #1f509633}
+#stats{display:flex;gap:8px;justify-content:space-between;margin-top:11px}
+.stat{width:50%;min-width:0;background:#ffffffdd;padding:9px 10px 10px;border-radius:13px;box-shadow:0 4px 12px #2c4a7621;font-weight:800}
+.stat .line{display:flex;justify-content:space-between;font-size:11px;margin-bottom:7px}
+.bar{height:9px;background:#d6e1f1;border-radius:12px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:12px;transition:width .2s}
+.blue i{background:linear-gradient(90deg,#2996ff,#2a52e7)}.red i{background:linear-gradient(90deg,#ffaf5f,#ff3b62)}
+#info{margin:10px auto 0;text-align:center;background:#193965b8;color:#fff;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:800;width:max-content;max-width:95%}
+#controls{position:fixed;z-index:3;bottom:calc(18px + env(safe-area-inset-bottom));left:12px;right:12px;display:flex;align-items:flex-end;justify-content:space-between;pointer-events:none;color:#fff}
+#guide{max-width:58%;font-size:12px;font-weight:800;text-shadow:0 2px 4px #173154;padding:10px 12px;border-radius:14px;background:#23487caa}
+#turbo{pointer-events:auto;min-width:120px;height:66px;border:3px solid #fff8;border-radius:19px;background:linear-gradient(#f9c848,#f4793c);color:#773613;font-weight:1000;box-shadow:0 8px 0 #a6562d,0 12px 23px #162b524d;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0}
+#turbo strong{font-size:17px}#turbo small{font-size:10px}#turbo:disabled{filter:grayscale(.9);opacity:.65}
+#overlay{position:fixed;z-index:7;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#0c1f4aaf,#122657d2);padding:20px;overflow-y:auto}
+#overlay[hidden]{display:none}
+.panel{width:min(100%,420px);border:3px solid #fff8;background:linear-gradient(180deg,#fff,#eaf4ff);border-radius:28px;box-shadow:0 18px 70px #061533aa;padding:24px 20px 22px;color:#203a68;text-align:center}
+.logo{font-size:12px;font-weight:1000;letter-spacing:.17em;color:#4977da}.panel h1{font-size:clamp(30px,7vw,44px);line-height:1.07;letter-spacing:-.05em;margin:10px 0 8px;text-shadow:1px 2px #c4d7ff}
+.panel p{font-size:14px;line-height:1.5;color:#60779b;margin:7px 0 18px}
+.medal{font-size:48px;filter:drop-shadow(0 7px 5px #94acd1);margin:4px 0}
+.main-button{width:100%;border-radius:14px;padding:16px;background:linear-gradient(180deg,#438afa,#2856e9);color:#fff;font-weight:1000;font-size:18px;box-shadow:0 6px 0 #1937a1;margin:6px 0 14px}
+.hint{font-size:12px;color:#6882a6}
+.panel .details{display:flex;justify-content:space-around;padding:12px 3px;background:#e7efff;border-radius:14px;margin:15px 0;font-weight:800}
+.panel .details b{display:block;font-size:20px;color:#315cdb}
+.upgrades{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.upgrade{padding:12px 8px;border-radius:15px;background:#fff;border:1px solid #c8d7f5;color:#234377;box-shadow:0 4px 0 #b8ccef;font-weight:800;font-size:12px}
+.upgrade span{display:block;font-weight:600;color:#617da4;font-size:11px;margin-top:6px}
+.upgrade:disabled{filter:grayscale(1);opacity:.5}
+#topnote{position:fixed;z-index:4;top:31%;left:50%;transform:translateX(-50%);color:white;text-shadow:0 3px 7px #0d2565;font-size:26px;font-weight:1000;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s}
+#topnote.show{opacity:1}
+@media(min-width:700px){#hud,#controls{left:calc(50% - 230px);right:calc(50% - 230px)}#hud{padding-left:10px;padding-right:10px}}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Ігрове поле Crowd Rush. Рухай гармату вліво або вправо, щоб спрямовувати армію крізь ворота множення"></canvas>
+<div id="hud">
+  <div id="brand"><span class="tag">⚡ <strong>KONTA</strong> · CROWD RUSH</span><button id="pause" aria-label="Пауза">Ⅱ</button></div>
+  <div id="stats">
+    <div class="stat"><div class="line"><span>🔵 НАША БАЗА</span><span id="blueHp">100%</span></div><div class="bar blue"><i id="blueBar" style="width:100%"></i></div></div>
+    <div class="stat"><div class="line"><span>🔴 ВОРОЖА БАЗА</span><span id="redHp">100%</span></div><div class="bar red"><i id="redBar" style="width:100%"></i></div></div>
+  </div>
+  <div id="info">Рівень 1 · 🪙 0 · 🔵 0</div>
+</div>
+<div id="topnote" aria-live="polite"></div>
+<div id="controls"><div id="guide">👆 Веди пальцем — рухай гармату. Стріляє автоматично!</div><button id="turbo" disabled><strong>⚡ ШТУРМ</strong><small id="turboHint">Заряджається…</small></button></div>
+<div id="overlay"><div class="panel">
+  <div class="logo">KONTA ORIGINAL GAME</div>
+  <div class="medal" id="emblem">🛡️</div>
+  <h1 id="heading">CROWD<br>RUSH</h1>
+  <p id="description">Стріляй синіми бійцями, проходь крізь ворота ×2 та ×5, зупиняй червону армію й розбивай ворожу фортецю.</p>
+  <div class="details"><div>Рівень<b id="levelValue">1</b></div><div>Монети<b id="coinValue">0</b></div><div>Побіди<b id="winValue">0</b></div></div>
+  <button id="play" class="main-button">▶ ПОЧАТИ БИТВУ</button>
+  <div class="hint" id="upgradeHeading">Покращити армію</div>
+  <div class="upgrades" id="upgrades">
+    <button class="upgrade" id="upgradeRate">🔫 Скорострільність<span></span></button>
+    <button class="upgrade" id="upgradePower">🛡️ Міць армії<span></span></button>
+  </div>
+  <div class="hint">Ігровий прототип для iPhone · оригінальна графіка KONTA</div>
+</div></div>
+<script>
+(function(){
+'use strict';
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d',{alpha:false});
+const el=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const rand=(a,b)=>a+Math.random()*(b-a);
+const choice=a=>a[Math.floor(Math.random()*a.length)];
+let W=390,H=820,dpr=1,last=0,t=0,phase='menu',noteTimeout=0;
+const key='konta_crowd_rush_v1';
+let saved={level:1,coins:50,wins:0,rate:0,power:0};
+try{const data=JSON.parse(localStorage.getItem(key)||'{}');for(const k of Object.keys(saved))if(Number.isFinite(data[k]))saved[k]=clamp(Math.floor(data[k]),0,k==='coins'?1000000:10000)}catch(e){}
+saved.level=Math.max(1,saved.level);
+let units=[],particles=[],gates=[],cannonX=0,spawnTime=0,enemySpawn=0,turboCharge=0,enemyMax=85,enemyHealth=85,homeMax=22,homeHealth=22,tapX=null,drag=false,shots=0,casualties=0;
+let audio=null;
+function beep(f=450,secs=.045,kind='sine',vol=.025){
+  try{if(!audio)audio=new(window.AudioContext||window.webkitAudioContext)();
+    if(audio.state==='suspended')audio.resume();
+    const o=audio.createOscillator(),g=audio.createGain();o.type=kind;o.frequency.value=f;
+    g.gain.value=vol;g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+secs);
+    o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+secs);
+  }catch(e){}
+}
+function keep(){try{localStorage.setItem(key,JSON.stringify(saved))}catch(e){}}
+function resize(){
+ W=Math.max(280,window.innerWidth);H=Math.max(440,window.innerHeight);
+ dpr=Math.min(2,window.devicePixelRatio||1);
+ canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
+ canvas.style.width=W+'px';canvas.style.height=H+'px';
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize',resize,{passive:true});resize();
+function point(x,z){
+ const f=1/(1+z/440);
+ return {x:W/2+x*(Math.min(W,550)/350)*f,y:H*.18+H*.8*f,s:Math.min(W,550)/350*f};
+}
+function line(x1,z1,x2,z2,color,width){
+ const a=point(x1,z1),b=point(x2,z2);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();
+}
+function roundRect(x,y,w,h,r,color){
+ if(w<=0||h<=0)return;
+ ctx.beginPath();ctx.roundRect(x,y,w,h,Math.max(0,Math.min(r,w/2,h/2)));ctx.fillStyle=color;ctx.fill();
+}
+function ell(x,y,rx,ry,c){ctx.beginPath();ctx.ellipse(x,y,Math.max(.3,rx),Math.max(.3,ry),0,0,Math.PI*2);ctx.fillStyle=c;ctx.fill()}
+function poly(points,color){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fillStyle=color;ctx.fill()}
+function whiteText(str,x,y,size,color='#fff'){
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
+ ctx.font='1000 '+size+'px system-ui, sans-serif';ctx.lineWidth=Math.max(2,size/5);ctx.strokeStyle='#203a6488';ctx.strokeText(str,x,y);ctx.fillStyle=color;ctx.fillText(str,x,y);
+}
+function sky(){
+ const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,'#70b5ed');grad.addColorStop(.43,'#bbebf5');grad.addColorStop(.76,'#94d79a');grad.addColorStop(1,'#62b365');
+ ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+ const offset=Math.sin(t*.07)*5;
+ const sunx=W*.84,suny=H*.18;ell(sunx,suny,31,31,'#fff7c4a8');ell(sunx,suny,20,20,'#fff8bd');
+ for(let i=0;i<6;i++){
+  const x=((i*173+W*.15+offset*(i+1))%(W+240))-80,y=H*(.12+.045*(i%3));
+  ell(x,y,35,13,'#f3fbffb9');ell(x+24,y-6,28,18,'#f3fbffb9');
+ }
+ poly([{x:0,y:H*.43},{x:W*.16,y:H*.29},{x:W*.32,y:H*.43}], '#85bfc4');
+ poly([{x:W*.21,y:H*.43},{x:W*.5,y:H*.31},{x:W*.79,y:H*.43}],'#9ad1d1');
+ poly([{x:W*.62,y:H*.43},{x:W*.86,y:H*.3},{x:W,y:H*.43}],'#81bac7');
+ ctx.fillStyle='#7cc47b';ctx.fillRect(0,H*.42,W,H*.58);
+ // patches and stylized trees beyond the arena
+ for(let i=0;i<18;i++){
+  const z=(i*61+19)%1050,x=i%2===0?-225-randFixed(i)*70:225+randFixed(i+9)*70;
+  const p=point(x,z);const s=Math.max(2,p.s*26);
+  ell(p.x,p.y,s*.7,s*.24,'#397f4180');ell(p.x,p.y-s*.55,s*.54,s*.75,'#2d9a59');ell(p.x-s*.18,p.y-s*.9,s*.36,s*.5,'#5dbb71');
+ }
+}
+function randFixed(n){const v=Math.sin(n*33.81)*47453.13;return v-Math.floor(v)}
+function road(){
+ const a=point(-185,0),b=point(185,0),c=point(185,1100),d=point(-185,1100);
+ poly([a,b,c,d],'#a7bed0');
+ const left=point(-176,0),right=point(176,0),lfar=point(-176,1100),rfar=point(176,1100);
+ poly([left,right,rfar,lfar],'#e1eaf0');
+ line(-180,0,-180,1100,'#fff',5);
+ line(180,0,180,1100,'#fff',5);
+ for(let i=50;i<1110;i+=135){
+  line(-7,i,-7,i+62,'#fff9',3);
+  line(7,i,7,i+62,'#fff9',3);
+ }
+ // translucent sides
+ line(-185,0,-185,1100,'#7aacc8',9);line(185,0,185,1100,'#7aacc8',9);
+}
+function castle(){
+ const p=point(0,950),s=p.s;
+ ell(p.x,p.y+4*s,225*s,32*s,'#4b68714a');
+ roundRect(p.x-148*s,p.y-145*s,296*s,140*s,14*s,'#b93055');
+ roundRect(p.x-135*s,p.y-130*s,270*s,118*s,10*s,'#e2556f');
+ for(let i=-2;i<=2;i++)roundRect(p.x+(i*63-24)*s,p.y-167*s,48*s,43*s,5*s,'#c93653');
+ roundRect(p.x-55*s,p.y-105*s,110*s,110*s,34*s,'#753349');
+ roundRect(p.x-43*s,p.y-89*s,86*s,90*s,27*s,'#432c50');
+ for(let i=-1;i<=1;i++)ell(p.x+i*62*s,p.y-120*s,13*s,9*s,'#ffe5cf');
+ whiteText('★',p.x,p.y-191*s,27*s,'#fff6ad');
+ // opponent strength indicator
+ roundRect(p.x-102*s,p.y-220*s,204*s,21*s,9*s,'#2c3155');
+ roundRect(p.x-99*s,p.y-217*s,198*s*clamp(enemyHealth/enemyMax,0,1),15*s,7*s,'#ff6d83');
+}
+function drawGate(g){
+ const p=point(g.x,g.z),s=p.s,k=g.kind;
+ const w=115*s,h=135*s,x=p.x-w/2,y=p.y-h;
+ const green=k>0,main=green?'#21de8d':'#fc6070',edge=green?'#077c6a':'#a92d50';
+ ctx.shadowColor=main;ctx.shadowBlur=18*s;
+ roundRect(x-9*s,y+12*s,20*s,h,7*s,edge);
+ roundRect(x+w-11*s,y+12*s,20*s,h,7*s,edge);
+ roundRect(x-5*s,y,w+10*s,30*s,8*s,edge);
+ roundRect(x+5*s,y+4*s,w-10*s,21*s,7*s,main);
+ ctx.shadowBlur=0;
+ poly([{x:x+11*s,y:y+32*s},{x:x+w-11*s,y:y+32*s},{x:x+w-11*s,y:p.y},{x:x+11*s,y:p.y}],green?'#1af5ad21':'#ff677522');
+ whiteText(k>0?'×'+k:'÷'+Math.abs(k),p.x,y-9*s,Math.max(10,38*s),green?'#fff': '#fff3d9');
+}
+function soldier(u){
+ const p=point(u.x,u.z),s=p.s*(u.team==='b'?1:1.08),v=Math.max(2.2,8.5*s);
+ const wobble=Math.sin(t*11+u.id)*1.4*s;
+ ell(p.x,p.y+2*s,v*1.2,v*.43,'#36567344');
+ // moving feet
+ ctx.strokeStyle=u.team==='b'?'#174ea0':'#9b314c';ctx.lineWidth=Math.max(1,2.5*s);
+ ctx.beginPath();ctx.moveTo(p.x-3*s,p.y-4*s);ctx.lineTo(p.x-3*s+wobble,p.y+3*s);ctx.moveTo(p.x+3*s,p.y-4*s);ctx.lineTo(p.x+3*s-wobble,p.y+3*s);ctx.stroke();
+ roundRect(p.x-6*s,p.y-18*s,12*s,14*s,4*s,u.team==='b'?'#186af0':'#e9435b');
+ ell(p.x,p.y-22*s,7.5*s,7.5*s,u.team==='b'?'#77c5ff':'#ffb0a4');
+ ell(p.x-2*s,p.y-25*s,2.5*s,1.6*s,'#ffffff99');
+ roundRect(p.x-5*s,p.y-29*s,10*s,4*s,2*s,u.team==='b'?'#1c4ca9':'#b63353');
+}
+function drawCannon(){
+ const p=point(cannonX,15),s=p.s;
+ ell(p.x,p.y+5*s,45*s,19*s,'#37527b55');
+ roundRect(p.x-38*s,p.y-12*s,76*s,25*s,10*s,'#164b9d');
+ roundRect(p.x-32*s,p.y-21*s,64*s,25*s,10*s,'#3a82ee');
+ roundRect(p.x-18*s,p.y-72*s,36*s,60*s,12*s,'#194faa');
+ roundRect(p.x-15*s,p.y-78*s,30*s,58*s,12*s,'#5da8ff');
+ ell(p.x,p.y-75*s,17*s,9*s,'#163a73');
+ ell(p.x,p.y-76*s,11*s,5*s,'#d5ecff');
+ for(let k of [-1,1]){
+  ell(p.x+k*36*s,p.y+4*s,14*s,18*s,'#1a3256');
+  ell(p.x+k*36*s,p.y+4*s,7*s,10*s,'#607ca1');
+ }
+ whiteText('K',p.x,p.y-6*s,18*s,'#fff');
+}
+function particlesDraw(){
+ particles.forEach(p=>{
+  const q=point(p.x,p.z);
+  const a=clamp(p.life/.55,0,1);
+  ctx.globalAlpha=a;
+  ell(q.x,q.y-p.h*q.s,p.r*q.s,p.r*q.s,p.color);
+ });
+ ctx.globalAlpha=1;
+}
+function fx(x,z,color,count=8){
+ for(let i=0;i<count&&particles.length<250;i++)particles.push({x,z,h:rand(0,17),vx:rand(-45,45),vz:rand(-30,30),vh:rand(8,45),r:rand(2,7),color,life:rand(.2,.55)});
+}
+function note(message){
+ const e=el('topnote');e.textContent=message;e.classList.add('show');
+ clearTimeout(noteTimeout);noteTimeout=setTimeout(()=>e.classList.remove('show'),1100);
+}
+function hud(){
+ el('blueHp').textContent=Math.ceil(100*homeHealth/homeMax)+'%';
+ el('redHp').textContent=Math.ceil(100*enemyHealth/enemyMax)+'%';
+ el('blueBar').style.width=clamp(100*homeHealth/homeMax,0,100)+'%';
+ el('redBar').style.width=clamp(100*enemyHealth/enemyMax,0,100)+'%';
+ el('info').textContent='Рівень '+saved.level+' · 🪙 '+saved.coins+' · 🔵 '+units.filter(u=>u.team==='b').length;
+ el('turbo').disabled=phase!=='playing'||turboCharge<1;
+ el('turboHint').textContent=turboCharge>=1?'ГОТОВО!':Math.ceil(turboCharge*100)+'%';
+}
+function makeUnit(team,x,z){
+ if(units.length>=310)return;
+ units.push({id:Math.random()*1000000,team,x:clamp(x,-167,167),z,mask:0,v:rand(.91,1.08)});
+}
+function setup(){
+ units=[];particles=[];cannonX=0;spawnTime=0;enemySpawn=0;turboCharge=.1;shots=0;casualties=0;t=0;
+ enemyMax=90+(saved.level-1)*24;enemyHealth=enemyMax;
+ homeMax=25+saved.power*4;homeHealth=homeMax;
+ const mult1=saved.level%3===0?4:3;
+ gates=[
+  {z:260,kind:2,x:-92,row:0},{z:260,kind:mult1,x:92,row:0},
+  {z:510,kind:saved.level%2===0?-2:3,x:-92,row:1},{z:510,kind:5,x:92,row:1}
+ ];
+ phase='playing';el('overlay').hidden=true;hud();
+}
+function victory(){
+ phase='victory';
+ const prize=65+saved.level*21+Math.floor(homeHealth/homeMax*35);
+ saved.coins+=prize;saved.wins++;saved.level++;keep();
+ beep(650,.16,'triangle',.08);setTimeout(()=>beep(880,.2,'triangle',.07),180);
+ showPanel('🏆','ПЕРЕМОГА!','Ворожу фортецю захоплено! +'+prize+' монет. Твоя армія стає сильнішою!','▶ НАСТУПНИЙ РІВЕНЬ');
+}
+function defeat(){
+ phase='defeat';beep(155,.3,'sawtooth',.035);
+ showPanel('💔','ПОРАЗКА','Вороги прорвали оборону. Покращи свою армію й спробуй ще раз.','↻ ПОВТОРИТИ');
+}
+function showPanel(icon,title,description,button){
+ el('emblem').textContent=icon;el('heading').textContent=title;el('description').textContent=description;el('play').textContent=button;
+ el('levelValue').textContent=saved.level;el('coinValue').textContent=saved.coins;el('winValue').textContent=saved.wins;
+ const rateCost=70+saved.rate*75,powerCost=85+saved.power*80;
+ el('upgradeRate').querySelector('span').textContent='Рівень '+saved.rate+' · 🪙 '+rateCost;
+ el('upgradePower').querySelector('span').textContent='Рівень '+saved.power+' · 🪙 '+powerCost;
+ el('upgradeRate').disabled=saved.coins<rateCost||saved.rate>=9;
+ el('upgradePower').disabled=saved.coins<powerCost||saved.power>=9;
+ el('overlay').hidden=false;
+}
+function multiplier(gate,index){
+ const extra=Math.min(8,Math.abs(gate.kind)-1);
+ if(gate.kind>0){
+  for(let j=0;j<extra&&units.length<290;j++){
+   const offset=(j-(extra-1)/2)*12+rand(-5,5);
+   makeUnit('b',clamp(index.x+offset,-160,160),index.z-rand(5,17));
+   units[units.length-1].mask=index.mask;
+  }
+  fx(index.x,index.z,'#37eba5',4);if(Math.random()<.2)beep(710,.03);
+ }else{
+  index.dead=true;
+  fx(index.x,index.z,'#ff6590',4);
+ }
+}
+function step(dt){
+ t+=dt;
+ if(phase!=='playing')return;
+ spawnTime+=dt;
+ const interval=Math.max(.055,.155-saved.rate*.009);
+ while(spawnTime>=interval){spawnTime-=interval;makeUnit('b',cannonX+rand(-8,8),56);shots++}
+ enemySpawn+=dt;
+ const foeInterval=Math.max(.19,.61-saved.level*.026);
+ while(enemySpawn>=foeInterval){enemySpawn-=foeInterval;makeUnit('r',rand(-133,133),890)}
+ turboCharge=Math.min(1,turboCharge+dt/11);
+ for(const u of units){
+  const old=u.z;
+  u.z+=(u.team==='b'?125+saved.power*3:-69)*dt*u.v;
+  u.x=clamp(u.x+Math.sin(u.id+u.z/80)*1.9*dt,-167,167);
+  if(u.team==='b'){
+   for(const g of gates)if(!(u.mask&(1<<g.row))&&old<g.z&&u.z>=g.z&&Math.abs(u.x-g.x)<51){
+     u.mask|=1<<g.row;multiplier(g,u);break;
+   }
+   if(u.z>927){u.dead=true;enemyHealth=Math.max(0,enemyHealth-(1+Math.floor(saved.power/3)));fx(u.x,923,'#ffd768',5)}
+  }else if(u.z<38){u.dead=true;homeHealth=Math.max(0,homeHealth-1);fx(u.x,37,'#ff718d',5)}
+ }
+ // Only compare soldiers in the same vicinity (sparse spatial buckets).
+ const buckets=new Map();
+ for(const u of units)if(!u.dead&&u.team==='r'){
+  const b=Math.floor(u.z/24);if(!buckets.has(b))buckets.set(b,[]);buckets.get(b).push(u);
+ }
+ for(const b of units)if(!b.dead&&b.team==='b'){
+  const bucket=Math.floor(b.z/24);
+  let caught=false;
+  for(let k=bucket-1;k<=bucket+1&&!caught;k++)for(const r of buckets.get(k)||[]){
+   if(!r.dead&&Math.abs(b.x-r.x)<13&&Math.abs(b.z-r.z)<18){
+    b.dead=r.dead=true;casualties++;fx(b.x,b.z,'#ffe58a',5);
+    caught=true;break;
+   }
+  }
+ }
+ units=units.filter(u=>!u.dead);
+ for(const p of particles){p.life-=dt;p.x+=p.vx*dt;p.z+=p.vz*dt;p.h+=p.vh*dt;p.vh-=140*dt}
+ particles=particles.filter(p=>p.life>0);
+ if(enemyHealth<=0){victory();return}
+ if(homeHealth<=0){defeat();return}
+}
+function render(){
+ sky();road();castle();
+ // gate lines are projections on the arena surface.
+ for(const g of gates.slice().sort((a,b)=>b.z-a.z))drawGate(g);
+ units.slice().sort((a,b)=>b.z-a.z).forEach(soldier);
+ particlesDraw();drawCannon();
+ const shot=point(cannonX,70);
+ if(phase==='playing'){
+  const glow=4+Math.sin(t*8)*2;ell(shot.x,shot.y-8*shot.s,glow,glow,'#f5e36a99');
+ }
+}
+function frame(ms){
+ const dt=Math.min(.04,Math.max(0,(ms-last)/1000));last=ms;
+ if(phase==='playing')step(dt);
+ render();
+ if(phase==='playing'&&Math.floor(ms/150)!==Math.floor((ms-dt*1000)/150))hud();
+ requestAnimationFrame(frame);
+}
+function movePointer(e){
+ if(phase!=='playing')return;
+ const rect=canvas.getBoundingClientRect();
+ const x=(e.clientX-rect.left)/rect.width;
+ cannonX=clamp((x-.5)*350,-148,148);
+}
+canvas.addEventListener('pointerdown',e=>{drag=true;try{canvas.setPointerCapture(e.pointerId)}catch(x){}movePointer(e)});
+canvas.addEventListener('pointermove',e=>{if(drag)movePointer(e)});
+canvas.addEventListener('pointerup',()=>drag=false);
+canvas.addEventListener('pointercancel',()=>drag=false);
+document.addEventListener('keydown',e=>{
+ if(e.key==='ArrowLeft'||e.key==='a')cannonX=clamp(cannonX-18,-148,148);
+ if(e.key==='ArrowRight'||e.key==='d')cannonX=clamp(cannonX+18,-148,148);
+ if(e.code==='Space'&&phase==='playing'){e.preventDefault();activateTurbo()}
+});
+function activateTurbo(){
+ if(phase!=='playing'||turboCharge<1)return;
+ turboCharge=0;note('⚡ ШТУРМ!');
+ for(let i=0;i<28&&units.length<300;i++)makeUnit('b',clamp(cannonX+rand(-58,58),-165,165),rand(55,145));
+ beep(450,.09,'sawtooth',.055);setTimeout(()=>beep(750,.12,'triangle',.045),100);
+ hud();
+}
+el('turbo').addEventListener('click',activateTurbo);
+el('play').addEventListener('click',()=>{beep(450,.08);setup()});
+el('pause').addEventListener('click',()=>{
+ if(phase==='playing'){phase='paused';showPanel('⏸️','ПАУЗА','Бій призупинено. Натисни «Продовжити», щоб повернутися.','▶ ПРОДОВЖИТИ')}
+ else if(phase==='paused'){phase='playing';el('overlay').hidden=true}
+});
+el('play').addEventListener('click',()=>{
+ if(phase==='paused'){phase='playing';el('overlay').hidden=true}
+});
+function upgrade(kind){
+ const c=kind==='rate'?70+saved.rate*75:85+saved.power*80;
+ if(saved.coins<c)return;
+ if(saved[kind]>=9)return;
+ saved.coins-=c;saved[kind]++;keep();beep(790,.09);
+ showPanel(el('emblem').textContent,el('heading').textContent,el('description').textContent,el('play').textContent);
+}
+el('upgradeRate').addEventListener('click',()=>upgrade('rate'));
+el('upgradePower').addEventListener('click',()=>upgrade('power'));
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&phase==='playing'){phase='paused';showPanel('⏸️','ПАУЗА','Повернися до битви, коли будеш готовий.','▶ ПРОДОВЖИТИ')}});
+showPanel('🛡️','CROWD RUSH','Керуй гарматою, збільшуй армію через ворота, відбивай атаки й захоплюй фортецю!','▶ ПОЧАТИ БИТВУ');
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
